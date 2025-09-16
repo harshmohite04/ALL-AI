@@ -1,0 +1,10 @@
+langgraph 
+langsmith
+langchain
+langchain-anthropic
+langchain-openai
+langchain-groq
+langchain-google-genai
+langchain-perplexity
+langchain-xai
+langchain_deepseek
