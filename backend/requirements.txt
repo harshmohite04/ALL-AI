@@ -7,4 +7,4 @@ langchain-groq
 langchain-google-genai
 langchain-perplexity
 langchain-xai
-langchain_deepseek
+dotenv
