@@ -21,9 +21,13 @@ interface MultiModelChatProps {
   models: Model[]
   modelMessages: ModelMessages
   isLoading: {[key: string]: boolean}
+  selectedVersions: {[key: string]: string}
+  onVersionChange: (modelId: string, version: string) => void
+  enabledModels: {[key: string]: boolean}
+  onToggleModel: (models: {[key: string]: boolean}) => void
 }
 
-export default function MultiModelChat({ models, modelMessages, isLoading }: MultiModelChatProps) {
+export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel }: MultiModelChatProps) {
   const getModelColor = (color: string) => {
     const colors = {
       green: 'bg-green-500',
@@ -38,106 +42,117 @@ export default function MultiModelChat({ models, modelMessages, isLoading }: Mul
     return colors[color as keyof typeof colors] || 'bg-gray-500'
   }
 
-  const getModelBorderColor = (color: string) => {
-    const colors = {
-      green: 'border-green-200',
-      blue: 'border-blue-200',
-      purple: 'border-purple-200',
-      indigo: 'border-indigo-200',
-      red: 'border-red-200',
-      orange: 'border-orange-200',
-      teal: 'border-teal-200',
-      pink: 'border-pink-200'
-    }
-    return colors[color as keyof typeof colors] || 'border-gray-200'
-  }
+  // Removed unused getModelBorderColor function
 
   return (
-    <div className="flex-1 overflow-hidden bg-gradient-to-br from-gray-50 to-white">
+    <div className="flex-1 overflow-hidden bg-gray-900">
       <div className="h-full flex overflow-x-auto horizontal-scroll">
         {models.map((model) => (
-          <div key={model.id} className={`w-80 flex-shrink-0 flex flex-col border-r border-gray-200/50 last:border-r-0 shadow-sm`}>
+          <div key={model.id} className={`w-96 flex-shrink-0 flex flex-col border-r border-gray-700/50 last:border-r-0`}>
             {/* Model Header */}
-            <div className={`${getModelColor(model.color)} text-white px-6 py-4 flex items-center gap-4 shadow-lg`}>
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <span className="text-xl">{model.icon}</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-sm">{model.name}</h3>
-                <p className="text-xs opacity-90">AI Assistant</p>
-              </div>
-              {isLoading[model.id] && (
-                <div className="ml-auto">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
+            <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between border-b border-gray-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
+                  <span className="text-sm">{model.icon}</span>
                 </div>
-              )}
+                <div>
+                  <h3 className="font-medium text-sm text-white">{model.name}</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Version selector in header */}
+                <select
+                  value={selectedVersions[model.id]}
+                  onChange={(e) => onVersionChange(model.id, e.target.value)}
+                  className="text-[11px] bg-gray-700 text-gray-100 border border-gray-600 rounded px-2 py-1"
+                >
+                  {(model as any).versions?.map((v: string) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+                {/* Enable/Disable toggle */}
+                <button
+                  onClick={() => onToggleModel({ ...enabledModels, [model.id]: !enabledModels[model.id] })}
+                  className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${enabledModels[model.id] ? 'bg-blue-600' : 'bg-gray-600'}`}
+                  aria-label={`Toggle ${model.name}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${enabledModels[model.id] ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="max-w-full space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-900">
+              <div className="space-y-4">
                 {modelMessages[model.id]?.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex gap-3 ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    } animate-in fade-in-0 slide-in-from-bottom-2 duration-300`}
-                  >
-                    {message.role === 'assistant' && (
-                      <div className={`w-9 h-9 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0 shadow-lg`}>
-                        <span className="text-white text-sm">{model.icon}</span>
+                  <div key={message.id} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                    {message.role === 'user' && (
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-white mb-1">Which model are you?</div>
+                          <div className="text-sm text-white bg-gray-800 rounded-lg p-3">
+                            {message.content}
+                          </div>
+                        </div>
+                        <button className="text-gray-400 hover:text-white transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
                       </div>
                     )}
                     
-                    <div
-                      className={`max-w-[85%] ${
-                        message.role === 'user'
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                          : 'bg-white text-gray-900 shadow-md border border-gray-100'
-                      } rounded-2xl px-4 py-3 transition-all duration-200 hover:shadow-lg`}
-                    >
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {message.content}
-                      </div>
-                      <div
-                        className={`text-xs mt-2 ${
-                          message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                        }`}
-                      >
-                        {message.timestamp.toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </div>
-                    </div>
-
-                    {message.role === 'user' && (
-                      <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                    {message.role === 'assistant' && (
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
+                          <span className="text-white text-sm">{model.icon}</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {message.content}
+                          </div>
+                          <div className="flex items-center gap-2 mt-3">
+                            <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                            <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                              </svg>
+                            </button>
+                            <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 13l3 3 7-7" />
+                              </svg>
+                            </button>
+                            <button className="text-gray-400 hover:text-white transition-colors text-xs">Share feedback</button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
                 ))}
 
                 {isLoading[model.id] && (
-                  <div className="flex gap-3 justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-                    <div className={`w-9 h-9 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                  <div className="flex items-start gap-3 mb-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                    <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
                       <span className="text-white text-sm">{model.icon}</span>
                     </div>
-                    <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-md">
-                      <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
                         <div className="flex gap-1">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                         </div>
-                        <span className="text-gray-500 text-sm font-medium">AI is thinking...</span>
+                        <span className="text-gray-400 text-sm">Thinking...</span>
                       </div>
                     </div>
                   </div>

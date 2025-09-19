@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Ensure global dark background so fixed elements don't reveal white page */
+html, body, #root {
+  height: 100%;
+  background-color: #0f172a; /* tailwind gray-900 */
+}
+
+body {
+  color-scheme: dark;
+}
+
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 6px;
@@ -25,7 +35,7 @@
 }
 
 .horizontal-scroll::-webkit-scrollbar-track {
-  background: #f8f9fa;
+  background: #0f172a; /* match page bg to avoid contrast edge */
 }
 
 .horizontal-scroll::-webkit-scrollbar-thumb {
@@ -34,7 +44,15 @@
 }
 
 .horizontal-scroll::-webkit-scrollbar-thumb:hover {
-  background: #adb5bd;
+  background: #6b7280; /* gray-500 */
+}
+
+/* Utility for floating input wrapper that should ignore pointer events */
+.floating-input-safe-area {
+  pointer-events: none;
+}
+.floating-input-safe-area > * {
+  pointer-events: auto;
 }
 
 /* Dark scrollbar for sidebar */

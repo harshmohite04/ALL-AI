@@ -1,2 +1,5 @@
 1. move the thread id from server.py to UI
 2. discard model if toggle is off in agent.py 
+3. Grab model information and specifly assign it in role
+4. when user asks model name etc, add it in system prompt to think twice
+

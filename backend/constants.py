@@ -7,17 +7,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm_ChatOpenAI = ChatOpenAI(
-    model="gpt-4o",  
+def llm_ChatOpenAI(openai_model_name):
+    return ChatOpenAI(
+    model=openai_model_name,  
     temperature=0.7,
 )
 
-llm_ChatGoogleGenerativeAI = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",   
+def llm_ChatGoogleGenerativeAI(google_model_name):
+    return ChatGoogleGenerativeAI(
+    model=google_model_name,   
     temperature=0.7,
+    
 )
 
-llm_ChatGroq = ChatGroq(
-    model="llama-3.1-8b-instant",  
+def llm_ChatGroq(groq_model_name):
+    return ChatGroq(
+    model=groq_model_name,  
     temperature=0.7,
 )

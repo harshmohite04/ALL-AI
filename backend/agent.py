@@ -16,29 +16,31 @@ graph = StateGraph(AgentState)
 
 
 def classify_model(state: AgentState):
-    selected = state.get("selected_models", [])
-    print(selected)
+    selected = list(state["selected_models"].keys())
     if not selected:
         END
     return selected
 
 
 def OpenAI(state: AgentState) -> AgentState:
-    
     openai_messages = state["openai_messages"]
-    response = llm_ChatOpenAI.invoke(openai_messages)
+    
+    openai_model_name = state["selected_models"]["OpenAI"]
+    response = llm_ChatOpenAI(openai_model_name).invoke(openai_messages)
     return {"openai_messages": response}
 
 
 def Google(state: AgentState) -> AgentState:
     google_messages = state["google_messages"]
-    response = llm_ChatGoogleGenerativeAI.invoke(google_messages)
+    google_model_name = state["selected_models"]["Google"]
+    response = llm_ChatGoogleGenerativeAI(google_model_name).invoke(google_messages)
     return {"google_messages": response}
 
-
 def Groq(state: AgentState) -> AgentState:
+    print("Groq called..")
     groq_messages = state["groq_messages"]
-    response = llm_ChatGroq.invoke(groq_messages)
+    groq_model_name = state["selected_models"]["Groq"]
+    response = llm_ChatGroq(groq_model_name).invoke(groq_messages)
     return {"groq_messages": response}
 
 
@@ -89,17 +91,21 @@ graph.add_edge("Groq", END)
 checkpointer = InMemorySaver()
 workflow = graph.compile(checkpointer=checkpointer)
 
-# config1 = {"configurable": {"thread_id": "1"}}
+config1 = {"configurable": {"thread_id": "1"}}
 
-# result = workflow.invoke(
-#     {
-#         "openai_messages": [HumanMessage(content="Hello")],
-#         "google_messages": [HumanMessage(content="Hello")],
-#         "groq_messages": [HumanMessage(content="Hello")],
-#         "selected_models": ["OpenAI","Google","Groq"],
-#     },
-#     config=config1,
-# )
+result = workflow.invoke(
+    {
+        "openai_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
+        "google_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
+        "groq_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
+        "selected_models": {
+            'OpenAI': 'gpt-4o',
+            'Google': 'gemini-2.0-flash',
+            'Groq': 'openai/gpt-oss-20b',
+        },
+    },
+    config=config1,
+)
 
 
 # result = workflow.invoke(
@@ -123,9 +129,9 @@ workflow = graph.compile(checkpointer=checkpointer)
 #     config=config1,
 # )
 
-# print(result["openai_messages"][-1].content)
-# print(result["google_messages"][-1].content)
-# print(result["groq_messages"][-1].content)
+print(result["openai_messages"][-1].content)
+print(result["google_messages"][-1].content)
+print(result["groq_messages"][-1].content)
 
 
 # Initialize conversation state
