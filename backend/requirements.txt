@@ -2,3 +2,5 @@ langgraph
 langchain_openai
 langchain_groq
 langchain_google_genai
+fastapi
+uvicorn
