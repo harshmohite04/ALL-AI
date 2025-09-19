@@ -7,8 +7,8 @@ from constants import (
     # llm_ChatPerplexity,
     # llm_ChatXAI,
 )
-
-
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import HumanMessage
 from agent_schema import AgentState
 
 
@@ -24,27 +24,27 @@ def classify_model(state: AgentState):
 
 
 def OpenAI(state: AgentState) -> AgentState:
-    user_query = state["user_query"]
-    response_llm_ChatOpenAI = llm_ChatOpenAI.invoke(user_query)
-    print(response_llm_ChatOpenAI)
-    # return {"responses": ["OpenAI", response_llm_ChatOpenAI]}
-    
-    return {"openai":response_llm_ChatOpenAI}
+    openai_messages = state["openai_messages"]
+    response = llm_ChatOpenAI.invoke(openai_messages)
+    return {"openai_messages": response}
+
+
+def Google(state: AgentState) -> AgentState:
+    google_messages = state["google_messages"]
+    response = llm_ChatGoogleGenerativeAI.invoke(google_messages)
+    return {"google_messages": response}
+
+
+def Groq(state: AgentState) -> AgentState:
+    groq_messages = state["groq_messages"]
+    response = llm_ChatGroq.invoke(groq_messages)
+    return {"groq_messages": response}
 
 
 # def Anthropic(state: AgentState) -> AgentState:
 #     user_query = state["user_query"]
 #     response_llm_ChatAnthropic = llm_ChatAnthropic.invoke(user_query)
 #     print(response_llm_ChatAnthropic)
-
-
-def Google(state: AgentState) -> AgentState:
-    user_query = state["user_query"]
-    response_llm_ChatGoogleGenerativeAI = llm_ChatGoogleGenerativeAI.invoke(user_query)
-    print(response_llm_ChatGoogleGenerativeAI)
-
-    # return {"responses": ["Google", response_llm_ChatGoogleGenerativeAI]}
-    return {"google":response_llm_ChatGoogleGenerativeAI}
 
 # def Grok(state: AgentState) -> AgentState:
 #     user_query = state["user_query"]
@@ -57,23 +57,14 @@ def Google(state: AgentState) -> AgentState:
 #     print(response_llm_ChatPerplexity)
 
 
-def Groq(state: AgentState) -> AgentState:
-    user_query = state["user_query"]
-    response_llm_ChatGroq = llm_ChatGroq.invoke(user_query)
-    print(response_llm_ChatGroq)
-
-    # return {"responses": ["Groq", response_llm_ChatGroq]}
-    return {"groq":response_llm_ChatGroq}
-
-
 graph.add_node("classify_model", classify_model)
 
 graph.add_node("OpenAI", OpenAI)
-# graph.add_node("Anthropic", Anthropic)
 graph.add_node("Google", Google)
+graph.add_node("Groq", Groq)
+# graph.add_node("Anthropic", Anthropic)
 # graph.add_node("Grok", Grok)
 # graph.add_node("Perplexity", Perplexity)
-graph.add_node("Groq", Groq)
 
 
 graph.add_conditional_edges(
@@ -94,17 +85,43 @@ graph.add_edge("Google", END)
 # graph.add_edge("Perplexity",END)
 graph.add_edge("Groq", END)
 
-workflow = graph.compile()
+checkpointer = InMemorySaver()
+workflow = graph.compile(checkpointer=checkpointer)
 
-initial_state: AgentState = {
-    "user_query": "whats your name",
-    "responses": {},
-    "tokens_used": {},
-    "timestamp": None,
-    "metadata": {},
-    "selected_models": ["OpenAI", "Google", "Groq"],  # UI toggles
-}
-print("111111111111111111111111111111")
-result = workflow.invoke(initial_state)
-print("111111111111111111111111111111")
-print(result)
+config1 = {"configurable": {"thread_id": "1"}}
+
+result = workflow.invoke(
+    {
+        "openai_messages": [HumanMessage(content="Hello")],
+        "google_messages": [HumanMessage(content="Hello")],
+        "groq_messages": [HumanMessage(content="Hello")],
+        "selected_models": ["OpenAI","Google","Groq"],
+    },
+    config=config1,
+)
+
+
+result = workflow.invoke(
+    {
+        "openai_messages": [HumanMessage(content="My name is Harsh Mohite")],
+        "google_messages": [HumanMessage(content="My name is Harsh Mohite")],
+        "groq_messages": [HumanMessage(content="My name is Harsh Mohite")],
+        "selected_models": ["OpenAI","Google","Groq"],
+    },
+    config=config1,
+)
+
+
+result = workflow.invoke(
+    {
+        "openai_messages": [HumanMessage(content="What is my name")],
+        "google_messages": [HumanMessage(content="What is my name")],
+        "selected_models": ["OpenAI","Google","Groq"],
+        "groq_messages": [HumanMessage(content="What is my name")],
+    },
+    config=config1,
+)
+
+print(result["openai_messages"][-1].content)
+print(result["google_messages"][-1].content)
+print(result["groq_messages"][-1].content)

@@ -1,14 +1,10 @@
-from typing import TypedDict, Optional, Dict, List
-from datetime import datetime
 
+from typing import TypedDict, List, Optional,Annotated
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict, total=False):
-    user_query: str
-    responses: Dict[str, str]
-    openai:List[str]
-    google:List[str]
-    groq:List[str]
-    errors: Dict[str, str]
-    timestamp: str
-    metadata: Dict
+    openai_messages: Annotated[list[BaseMessage],add_messages]
+    google_messages: Annotated[list[BaseMessage],add_messages]
+    groq_messages: Annotated[list[BaseMessage],add_messages]
     selected_models: List[str]

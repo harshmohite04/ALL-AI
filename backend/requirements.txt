@@ -1,10 +1,4 @@
-langgraph 
-langsmith
-langchain
-langchain-anthropic
-langchain-openai
-langchain-groq
-langchain-google-genai
-langchain-perplexity
-langchain-xai
-dotenv
+langgraph
+langchain_openai
+langchain_groq
+langchain_google_genai
