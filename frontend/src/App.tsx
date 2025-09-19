@@ -21,14 +21,17 @@ const MODELS = [
     name: 'ChatGPT 5', 
     color: 'green', 
     icon: '🤖',
-    versions: ['gpt-5', 'gpt-4o', 'gpt-4-turbo']
+    versions: ['gpt-4o', 'gpt-4-turbo', 'gpt-5'],
+    // Used to map to backend provider keys
+    providerKey: 'OpenAI'
   },
   { 
     id: 'gemini', 
     name: 'Gemini 2.5 Pro', 
     color: 'blue', 
     icon: '💎',
-    versions: ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    versions: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    providerKey: 'Google'
   }
   ,
   { 
@@ -44,7 +47,8 @@ const MODELS = [
     name: 'Groq', 
     color: 'indigo', 
     icon: '🔍',
-    versions: ['deepseek-chat', 'deepseek-coder']
+    versions: ['openai/gpt-oss-20b', 'llama-3.1-70b-versatile', 'mixtral-8x7b'],
+    providerKey: 'Groq'
   }
   ,
   { 
@@ -68,89 +72,23 @@ function App() {
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
     chatgpt: true,
     gemini: true,
-    deepseek: true
+    deepseek: false,
+    groq: false,
+    grok: false,
+    claude: false
   })
 
   const [selectedVersions, setSelectedVersions] = useState<{[key: string]: string}>({
-    chatgpt: 'gpt-5',
-    gemini: 'gemini-2.5-pro',
-    deepseek: 'deepseek-chat'
+    chatgpt: 'gpt-4o',
+    gemini: 'gemini-2.0-flash',
+    deepseek: 'deepseek-chat',
+    groq: 'openai/gpt-oss-20b'
   })
 
-  const [modelMessages, setModelMessages] = useState<ModelMessages>({
-    chatgpt: [{
-      id: '1',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'chatgpt'
-    }, {
-      id: '2',
-      content: 'I don\'t have a personal name or version number I can share. What I can tell you is that I\'m an AI assistant created by OpenAI to provide accurate, clear, and helpful responses across a wide range of topics.\n\nIf you\'d like, you can tell me more about what you want to do, and I can explain my capabilities in that context—for example: answering questions, helping with writing, reasoning through problems, or breaking down complex concepts.\n\n⚠️ Do you want to know more about what kinds of tasks I can handle?',
-      role: 'assistant',
-      timestamp: new Date(),
-      model: 'chatgpt'
-    }, {
-      id: '3',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'chatgpt'
-    }],
-    gemini: [{
-      id: '1',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'gemini'
-    }, {
-      id: '2',
-      content: 'I\'m an AI developed by OpenAI, here to assist you with your questions and tasks. How can I help you today?',
-      role: 'assistant',
-      timestamp: new Date(),
-      model: 'gemini'
-    }, {
-      id: '3',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'gemini'
-    }, {
-      id: '4',
-      content: 'I\'m an OpenAI language model designed to assist with information, problem-solving, and conversation. If you have any specific questions or need help with something, feel free to ask!',
-      role: 'assistant',
-      timestamp: new Date(),
-      model: 'gemini'
-    }],
-    deepseek: [{
-      id: '1',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'deepseek'
-    }, {
-      id: '2',
-      content: 'I\'m an AI assistant designed to provide helpful, accurate, and engaging responses to your questions. My focus is on understanding your needs and delivering the best possible assistance, whether you\'re looking for information, creative ideas, or problem-solving support.\n\nIf you have any specific questions or tasks, feel free to ask—I\'m here to help!',
-      role: 'assistant',
-      timestamp: new Date(),
-      model: 'deepseek'
-    }, {
-      id: '3',
-      content: 'Which model are you?',
-      role: 'user',
-      timestamp: new Date(),
-      model: 'deepseek'
-    }, {
-      id: '4',
-      content: 'I\'m an AI language model designed to assist with a wide range of topics, from answering questions and brainstorming ideas to offering guidance on complex subjects. While I don\'t have a specific public model name or version number, you can think of me as a highly capable conversational assistant optimized for accuracy, clarity, and helpfulness.\n\nIf you\'re curious about my capabilities or how I can assist you, feel free to ask—I\'m happy to help!',
-      role: 'assistant',
-      timestamp: new Date(),
-      model: 'deepseek'
-    }]
-  })
+  const [modelMessages, setModelMessages] = useState<ModelMessages>({})
   const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
 
-  // Broadcast a user message to all enabled models
+  // Broadcast a user message to all enabled models and fetch backend responses
   const handleSendMessage = async (content: string) => {
     const timestamp = new Date()
 
@@ -180,20 +118,85 @@ function App() {
     })
     setIsLoading(loadingState)
 
-    // Simulated responses per model
-    const responses: {[key: string]: string} = {
-      chatgpt: `I'm ${selectedVersions.chatgpt}! I received your message: "${content}".`,
-      gemini: `Hello! I'm ${selectedVersions.gemini}. Your message was: "${content}".`,
-      deepseek: `Hi! I'm ${selectedVersions.deepseek}. I read: "${content}".`
-    }
+    // Build selected_models payload from enabled models that have providerKey mapping
+    const providerMap: {[key: string]: string} = {}
+    MODELS.forEach(m => { if ((m as any).providerKey) providerMap[m.id] = (m as any).providerKey })
 
-    let idx = 0
-    Object.keys(responses).forEach(modelId => {
+    const selected_models: {[key: string]: string} = {}
+    Object.keys(enabledModels).forEach(modelId => {
       if (!enabledModels[modelId]) return
-      setTimeout(() => {
+      const providerKey = providerMap[modelId]
+      if (!providerKey) return // skip models not supported by backend
+      const version = selectedVersions[modelId]
+      if (version) selected_models[providerKey] = version
+    })
+
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_query: content,
+          selected_models,
+        })
+      })
+
+      // Attempt to parse JSON; if not ok, throw
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `Request failed with status ${res.status}`)
+      }
+      const data = await res.json().catch(() => ({}))
+
+      // Normalize possible response shapes
+      // Shape A: { responses: { OpenAI: '...', Google: '...', Groq: '...' } }
+      // Shape B: { OpenAI: '...', Google: '...', Groq: '...' }
+      const responsesByProvider: {[key: string]: string} = data?.responses && typeof data.responses === 'object'
+        ? data.responses
+        : data && typeof data === 'object' ? data : {}
+
+      // Reverse map provider -> modelId
+      const providerToModelId: {[key: string]: string} = {}
+      Object.entries(providerMap).forEach(([modelId, provider]) => { providerToModelId[provider] = modelId })
+
+      const processed: {[key: string]: boolean} = {}
+      Object.keys(responsesByProvider).forEach(provider => {
+        const modelId = providerToModelId[provider]
+        if (!modelId || !enabledModels[modelId]) return
+        const contentText = typeof responsesByProvider[provider] === 'string'
+          ? responsesByProvider[provider]
+          : JSON.stringify(responsesByProvider[provider])
+
         const assistantMessage: Message = {
-          id: `${Date.now() + idx}-${modelId}`,
-          content: responses[modelId],
+          id: `${Date.now()}-${modelId}`,
+          content: contentText,
+          role: 'assistant',
+          timestamp: new Date(),
+          model: modelId
+        }
+        setModelMessages(prev => ({
+          ...prev,
+          [modelId]: [...(prev[modelId] || []), assistantMessage]
+        }))
+        processed[modelId] = true
+        setIsLoading(prev => ({ ...prev, [modelId]: false }))
+      })
+
+      // For any enabled model that didn't receive a response, stop loading and show a generic message
+      Object.keys(enabledModels).forEach(modelId => {
+        if (!enabledModels[modelId]) return
+        if (processed[modelId]) return
+        if (!providerMap[modelId]) {
+          // Not supported by backend; stop loading silently
+          setIsLoading(prev => ({ ...prev, [modelId]: false }))
+          return
+        }
+        const assistantMessage: Message = {
+          id: `${Date.now()}-${modelId}`,
+          content: 'No response received for this model.',
           role: 'assistant',
           timestamp: new Date(),
           model: modelId
@@ -203,9 +206,29 @@ function App() {
           [modelId]: [...(prev[modelId] || []), assistantMessage]
         }))
         setIsLoading(prev => ({ ...prev, [modelId]: false }))
-      }, 700 + (idx * 400))
-      idx++
-    })
+      })
+    } catch (err: any) {
+      // On error, append error message to all enabled and supported models
+      Object.keys(enabledModels).forEach(modelId => {
+        if (!enabledModels[modelId]) return
+        if (!providerMap[modelId]) {
+          setIsLoading(prev => ({ ...prev, [modelId]: false }))
+          return
+        }
+        const assistantMessage: Message = {
+          id: `${Date.now()}-${modelId}`,
+          content: `Error contacting backend: ${err?.message || String(err)}`,
+          role: 'assistant',
+          timestamp: new Date(),
+          model: modelId
+        }
+        setModelMessages(prev => ({
+          ...prev,
+          [modelId]: [...(prev[modelId] || []), assistantMessage]
+        }))
+        setIsLoading(prev => ({ ...prev, [modelId]: false }))
+      })
+    }
   }
 
   const enabledModelsList = MODELS.filter(model => enabledModels[model.id])

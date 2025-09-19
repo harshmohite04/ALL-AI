@@ -42,19 +42,30 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
     return colors[color as keyof typeof colors] || 'bg-gray-500'
   }
 
+  // Resolve logo URLs from assets; fallback to emoji when not found
+  const logoModules = import.meta.glob('../assets/logos/*.{svg,png,jpg,jpeg,webp}', { eager: true, as: 'url' }) as Record<string, string>
+  const getLogoUrl = (modelId: string): string | null => {
+    const entry = Object.entries(logoModules).find(([path]) => path.includes(`/logos/${modelId}.`))
+    return entry ? entry[1] : null
+  }
+
   // Removed unused getModelBorderColor function
 
   return (
     <div className="flex-1 overflow-hidden bg-gray-900">
-      <div className="h-full flex overflow-x-auto horizontal-scroll">
+      <div className="h-full flex overflow-x-auto horizontal-scroll min-h-0 items-stretch">
         {models.map((model) => (
-          <div key={model.id} className={`w-96 flex-shrink-0 flex flex-col border-r border-gray-700/50 last:border-r-0`}>
+          <div key={model.id} className={`w-96 flex-shrink-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}>
             {/* Model Header */}
             <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between border-b border-gray-700/50">
               <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
-                  <span className="text-sm">{model.icon}</span>
-                </div>
+                {getLogoUrl(model.id) ? (
+                  <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-6 h-6 object-contain" />
+                ) : (
+                  <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
+                    <span className="text-sm">{model.icon}</span>
+                  </div>
+                )}
                 <div>
                   <h3 className="font-medium text-sm text-white">{model.name}</h3>
                 </div>
@@ -82,7 +93,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-900">
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-900 min-h-0">
               <div className="space-y-4">
                 {modelMessages[model.id]?.map((message) => (
                   <div key={message.id} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
@@ -94,7 +105,6 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           </svg>
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-white mb-1">Which model are you?</div>
                           <div className="text-sm text-white bg-gray-800 rounded-lg p-3">
                             {message.content}
                           </div>
@@ -109,9 +119,13 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                     
                     {message.role === 'assistant' && (
                       <div className="flex items-start gap-3 mb-4">
-                        <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
-                          <span className="text-white text-sm">{model.icon}</span>
-                        </div>
+                        {getLogoUrl(model.id) ? (
+                          <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-8 h-8 object-contain rounded" />
+                        ) : (
+                          <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
+                            <span className="text-white text-sm">{model.icon}</span>
+                          </div>
+                        )}
                         <div className="flex-1">
                           <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
                             {message.content}
