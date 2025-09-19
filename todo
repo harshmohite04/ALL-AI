@@ -1,0 +1,2 @@
+1. move the thread id from server.py to UI
+2. discard model if toggle is off in agent.py 
