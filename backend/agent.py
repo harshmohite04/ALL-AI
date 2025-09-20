@@ -10,7 +10,15 @@ from constants import (
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.messages import HumanMessage
 from agent_schema import AgentState
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from pymongo import MongoClient
+import os
 
+MONGO_URI=os.getenv("MONGO_URI",)
+client = MongoClient(MONGO_URI)
+# db and collection for checkpoints
+db = client["LangGraphDB"]
+collection = db["Checkpoints"]
 
 graph = StateGraph(AgentState)
 
@@ -88,24 +96,24 @@ graph.add_edge("Google", END)
 # graph.add_edge("Perplexity",END)
 graph.add_edge("Groq", END)
 
-checkpointer = InMemorySaver()
+checkpointer = MongoDBSaver(collection)
 workflow = graph.compile(checkpointer=checkpointer)
 
-config1 = {"configurable": {"thread_id": "1"}}
+# config1 = {"configurable": {"thread_id": "11112111111"}}
 
-result = workflow.invoke(
-    {
-        "openai_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
-        "google_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
-        "groq_messages": [HumanMessage(content="What is your model name,can you name your model and be specific with your model name")],
-        "selected_models": {
-            'OpenAI': 'gpt-4o',
-            'Google': 'gemini-2.0-flash',
-            'Groq': 'openai/gpt-oss-20b',
-        },
-    },
-    config=config1,
-)
+# result = workflow.invoke(
+#     {
+#         "openai_messages": [HumanMessage(content="what is my name")],
+#         "google_messages": [HumanMessage(content="what is my name")],
+#         "groq_messages": [HumanMessage(content="what is my name")],
+#         "selected_models": {
+#             'OpenAI': 'gpt-4o',
+#             'Google': 'gemini-2.0-flash',
+#             'Groq': 'openai/gpt-oss-20b',
+#         },
+#     },
+#     config=config1,
+# )
 
 
 # result = workflow.invoke(
@@ -129,9 +137,35 @@ result = workflow.invoke(
 #     config=config1,
 # )
 
-print(result["openai_messages"][-1].content)
-print(result["google_messages"][-1].content)
-print(result["groq_messages"][-1].content)
+# print(result["openai_messages"][-1].content)
+# print(result["google_messages"][-1].content)
+# print(result["groq_messages"][-1].content)
+
+history = list(workflow.get_state_history(config=config1))
+
+for i, step in enumerate(history, start=1):
+    if i==1:
+        print(f"\n=== Step {i} ===")
+
+        state = step.values
+
+        if "openai_messages" in state:
+            print("OpenAI Messages:")
+            for msg in state["openai_messages"]:
+                role = "User" if msg.type == "human" else "AI"
+                print(f"  [{role}] {msg.content}")
+
+        if "google_messages" in state:
+            print("Google Messages:")
+            for msg in state["google_messages"]:
+                role = "User" if msg.type == "human" else "AI"
+                print(f"  [{role}] {msg.content}")
+
+        if "groq_messages" in state:
+            print("Groq Messages:")
+            for msg in state["groq_messages"]:
+                role = "User" if msg.type == "human" else "AI"
+                print(f"  [{role}] {msg.content}")
 
 
 # Initialize conversation state
@@ -166,3 +200,4 @@ print(result["groq_messages"][-1].content)
 
 #     # Update state with latest responses
 #     state = result
+
