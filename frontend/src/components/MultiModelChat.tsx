@@ -52,7 +52,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
   // Removed unused getModelBorderColor function
 
   return (
-    <div className="flex-1 overflow-hidden bg-gray-900">
+    <div className="flex-1 overflow-hidden bg-gray-900 h-full">
       <div className="h-full flex overflow-x-auto horizontal-scroll min-h-0 items-stretch">
         {models.map((model) => (
           <div key={model.id} className={`w-96 flex-shrink-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}>
@@ -93,7 +93,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-900 min-h-0">
+            <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gray-900 min-h-0 overscroll-contain">
               <div className="space-y-4">
                 {modelMessages[model.id]?.map((message) => (
                   <div key={message.id} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">

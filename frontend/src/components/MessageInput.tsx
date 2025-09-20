@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
 
 interface MessageInputProps {
   onSendMessage: (message: string) => void
@@ -9,11 +9,21 @@ interface MessageInputProps {
 
 export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default' }: MessageInputProps) {
   const [message, setMessage] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // Keep focus on the textarea when enabled
+  useEffect(() => {
+    if (!disabled) {
+      textareaRef.current?.focus()
+    }
+  }, [disabled])
 
   const handleSubmit = () => {
     if (message.trim() && !disabled) {
       onSendMessage(message.trim())
       setMessage('')
+      // After sending, keep the cursor in the textarea
+      setTimeout(() => textareaRef.current?.focus(), 0)
     }
   }
 
@@ -33,11 +43,13 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
       <div className="max-w-full mx-auto ">
         <div className="relative ">
           <textarea
+            ref={textareaRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder={`Message ${enabledCount} AI models...`}
             disabled={disabled}
+            autoFocus
             className={
               variant === 'floating'
                 ? 'w-full px-4 py-3 pr-12 rounded-xl resize-none focus:outline-none border border-gray-700 bg-transparent text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -58,6 +70,11 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
           <button
             onClick={handleSubmit}
             disabled={!message.trim() || disabled}
+            type="button"
+            onMouseDown={(e) => {
+              // Prevent button from taking focus away from the textarea
+              e.preventDefault()
+            }}
             className={
               variant === 'floating'
                 ? 'absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'

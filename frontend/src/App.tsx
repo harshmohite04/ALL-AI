@@ -70,10 +70,10 @@ const MODELS = [
 
 function App() {
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
-    chatgpt: true,
+    chatgpt: false,
     gemini: true,
     deepseek: false,
-    groq: false,
+    groq: true,
     grok: false,
     claude: false
   })
@@ -246,7 +246,7 @@ function App() {
           enabledCount={enabledCount}
         />
       </div>
-      <div className="flex-1 ml-64 relative">
+      <div className="flex-1 ml-64 relative h-screen overflow-hidden">
         <MultiModelChat 
           models={enabledModelsList}
           modelMessages={modelMessages}
