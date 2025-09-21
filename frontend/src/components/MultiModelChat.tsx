@@ -1,3 +1,5 @@
+import AppleSelect from './AppleSelect'
+
 interface Message {
   id: string
   content: string
@@ -71,16 +73,13 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* Version selector in header */}
-                <select
+                {/* Version selector in header (Apple-style) */}
+                <AppleSelect
+                  options={(model as any).versions?.map((v: string) => ({ label: v, value: v })) ?? []}
                   value={selectedVersions[model.id]}
-                  onChange={(e) => onVersionChange(model.id, e.target.value)}
-                  className="text-[11px] bg-gray-700 text-gray-100 border border-gray-600 rounded px-2 py-1"
-                >
-                  {(model as any).versions?.map((v: string) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
-                </select>
+                  onChange={(val) => onVersionChange(model.id, val)}
+                  ariaLabel={`Select version for ${model.name}`}
+                />
                 {/* Enable/Disable toggle */}
                 <button
                   onClick={() => onToggleModel({ ...enabledModels, [model.id]: !enabledModels[model.id] })}

@@ -10,6 +10,13 @@ body {
   color-scheme: dark;
 }
 
+/* Firefox scrollbar (vertical/overall) */
+html {
+  /* thin, black thumb on dark track */
+  scrollbar-width: thin;
+  scrollbar-color: #3b3b3bd0 #0f172a;
+}
+
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 6px;
@@ -17,16 +24,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #0f172a; /* match page bg for seamless look */
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #000000; /* black vertical thumb by default */
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #111111; /* slightly lighter on hover */
 }
 
 /* Horizontal scrollbar for chat panels */
@@ -61,16 +68,16 @@ body {
 }
 
 .dark-scrollbar::-webkit-scrollbar-track {
-  background: #374151;
+  background: #0f172a;
 }
 
 .dark-scrollbar::-webkit-scrollbar-thumb {
-  background: #6b7280;
+  background: #000000;
   border-radius: 3px;
 }
 
 .dark-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #111111;
 }
 
 /* Smooth transitions */

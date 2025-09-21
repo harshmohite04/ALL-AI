@@ -95,15 +95,39 @@ function App() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
 
+  // Format a Date as local ISO string with timezone offset, e.g. 2025-09-19T20:29:12.498+05:30
+  const toLocalIsoWithOffset = (d: Date) => {
+    const pad = (n: number, len = 2) => n.toString().padStart(len, '0')
+    const year = d.getFullYear()
+    const month = pad(d.getMonth() + 1)
+    const day = pad(d.getDate())
+    const hours = pad(d.getHours())
+    const minutes = pad(d.getMinutes())
+    const seconds = pad(d.getSeconds())
+    const ms = pad(d.getMilliseconds(), 3)
+    const tz = -d.getTimezoneOffset()
+    const sign = tz >= 0 ? '+' : '-'
+    const tzAbs = Math.abs(tz)
+    const tzH = pad(Math.floor(tzAbs / 60))
+    const tzM = pad(tzAbs % 60)
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}${sign}${tzH}:${tzM}`
+  }
+
   // Helper to create a session via backend and return the session_id
   const createSession = async (session_name: string): Promise<string> => {
+    const nowLocal = new Date()
     const res = await fetch('http://127.0.0.1:8000/session/create', {
       method: 'POST',
       headers: {
         accept: 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ account_id: 'harsh', session_name }),
+      body: JSON.stringify({
+        account_id: 'harsh',
+        session_name,
+        time_stamp: toLocalIsoWithOffset(nowLocal),
+        last_activity: toLocalIsoWithOffset(nowLocal),
+      }),
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
@@ -123,10 +147,22 @@ function App() {
     }
     const data = await res.json().catch(() => ({} as any))
     const list = Array.isArray(data?.sessions) ? data.sessions : []
+    // Robust timestamp parser: if no timezone present, interpret as UTC; otherwise, let Date parse with the included offset
+    const parseTs = (v: any): Date => {
+      if (!v) return new Date()
+      if (v instanceof Date) return v
+      if (typeof v === 'string') {
+        const s = v.trim()
+        // detect explicit timezone or Zulu
+        const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s)
+        return hasTz ? new Date(s) : new Date(s + 'Z')
+      }
+      return new Date(v)
+    }
     const convs: Conversation[] = list.map((s: any) => ({
       id: s.session_id,
       title: s.session_name || 'New Chat',
-      timestamp: new Date(s.last_activity || s.time_stamp || Date.now()),
+      timestamp: parseTs(s.last_activity || s.time_stamp || Date.now()),
     }))
     // Sort by timestamp desc
     convs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
@@ -286,6 +322,7 @@ function App() {
           user_query: content,
           selected_models,
           session_id: activeSessionId,
+          client_time: toLocalIsoWithOffset(timestamp),
         })
       })
 
@@ -385,6 +422,13 @@ function App() {
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversationId(id)
+    // Update last_activity when user continues a session
+    try {
+      const nowLocal = new Date()
+      const url = `http://127.0.0.1:8000/session/update/harsh/${encodeURIComponent(id)}?last_activity=${encodeURIComponent(toLocalIsoWithOffset(nowLocal))}`
+      void fetch(url, { method: 'PUT', headers: { accept: 'application/json' } }).catch(() => {})
+      // Do not reorder locally on selection; ordering will change only when last_activity changes take effect.
+    } catch {}
     // Load history if we don't yet have messages for this session
     if (!sessionModelMessages[id]) {
       try {
@@ -392,6 +436,63 @@ function App() {
       } catch (e) {
         console.error('Failed to fetch history for session', id, e)
       }
+    }
+  }
+
+  // Rename a session via backend and update local state
+  const handleRenameConversation = async (id: string, newTitle: string) => {
+    try {
+      const url = `http://127.0.0.1:8000/session/update/harsh/${encodeURIComponent(id)}?session_name=${encodeURIComponent(newTitle)}`
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { accept: 'application/json' },
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `Failed to rename session: ${res.status}`)
+      }
+      // Update only the title; do not bump ordering here
+      setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c))
+    } catch (e) {
+      console.error('Failed to rename session', e)
+    }
+  }
+
+  // Delete a session via backend and update local state
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      const url = `http://127.0.0.1:8000/session/harsh/${encodeURIComponent(id)}`
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { accept: 'application/json' },
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `Failed to delete session: ${res.status}`)
+      }
+      setConversations(prev => prev.filter(c => c.id !== id))
+      setSessionModelMessages(prev => {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      })
+      setSessionLoading(prev => {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      })
+      if (activeConversationId === id) {
+        // Pick next available session if current was deleted
+        setTimeout(() => {
+          setConversations(current => {
+            const next = current[0]?.id || ''
+            setActiveConversationId(next)
+            return current
+          })
+        }, 0)
+      }
+    } catch (e) {
+      console.error('Failed to delete session', e)
     }
   }
 
@@ -409,6 +510,8 @@ function App() {
           activeConversationId={activeConversationId}
           onSelectConversation={handleSelectConversation}
           onNewChat={handleNewChat}
+          onRenameConversation={handleRenameConversation}
+          onDeleteConversation={handleDeleteConversation}
         />
       </div>
       <div className="flex-1 ml-64 relative h-screen overflow-hidden">

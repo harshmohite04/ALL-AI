@@ -103,11 +103,11 @@ def get_history(session_id: str):
 
 
 
-
-# Request model
 class SessionCreate(BaseModel):
     account_id: str = Field(description="Unique account ID of the user")
     session_name: str = Field(description="A friendly name for the session")
+    time_stamp: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Client-side timestamp")
+    last_activity: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Client-side last activity timestamp")
 
 
 @app.post("/session/create")
@@ -116,8 +116,8 @@ def create_session(data: SessionCreate):
     new_session = {
         "session_id": session_id,
         "session_name": data.session_name,
-        "time_stamp": datetime.utcnow(),
-        "last_activity": datetime.utcnow(),
+        "time_stamp": data.time_stamp,       # use frontend-provided timestamp
+        "last_activity": data.last_activity, # use frontend-provided timestamp
         "status": "active"
     }
 
