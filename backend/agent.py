@@ -41,6 +41,7 @@ def OpenAI(state: AgentState) -> AgentState:
 def Google(state: AgentState) -> AgentState:
     google_messages = state["google_messages"]
     google_model_name = state["selected_models"]["Google"]
+    print(google_model_name)
     response = llm_ChatGoogleGenerativeAI(google_model_name).invoke(google_messages)
     return {"google_messages": response}
 
@@ -48,6 +49,7 @@ def Groq(state: AgentState) -> AgentState:
     print("Groq called..")
     groq_messages = state["groq_messages"]
     groq_model_name = state["selected_models"]["Groq"]
+    print(groq_model_name)
     response = llm_ChatGroq(groq_model_name).invoke(groq_messages)
     return {"groq_messages": response}
 

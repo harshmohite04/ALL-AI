@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import MultiModelChat from './components/MultiModelChat'
 import MessageInput from './components/MessageInput'
@@ -13,7 +13,6 @@ interface Message {
 
 interface Conversation {
   id: string // UI identifier for the conversation
-  session_id: string // stable unique session id for backend correlation
   title: string
   timestamp: Date
 }
@@ -54,7 +53,7 @@ const MODELS = [
     name: 'Groq', 
     color: 'indigo', 
     icon: '🔍',
-    versions: ['openai/gpt-oss-20b', 'llama-3.1-70b-versatile', 'mixtral-8x7b'],
+    versions: ['openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b'],
     providerKey: 'Groq'
   }
   ,
@@ -93,15 +92,121 @@ function App() {
   })
 
   // Conversations and active conversation
-  const generateId = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  const initialSessionId = useMemo(() => generateId(), [])
-  const [conversations, setConversations] = useState<Conversation[]>([{
-    id: initialSessionId,
-    session_id: initialSessionId,
-    title: 'New Chat',
-    timestamp: new Date(),
-  }])
-  const [activeConversationId, setActiveConversationId] = useState<string>(initialSessionId)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string>('')
+
+  // Helper to create a session via backend and return the session_id
+  const createSession = async (session_name: string): Promise<string> => {
+    const res = await fetch('http://127.0.0.1:8000/session/create', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ account_id: 'harsh', session_name }),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `Session create failed: ${res.status}`)
+    }
+    const data = await res.json().catch(() => ({}))
+    if (!data?.session_id) throw new Error('No session_id in response')
+    return data.session_id as string
+  }
+
+  // Helper: fetch all sessions for the account and map to conversations
+  const fetchSessions = async (): Promise<Conversation[]> => {
+    const res = await fetch('http://127.0.0.1:8000/session/harsh', { headers: { accept: 'application/json' } })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `Failed to load sessions: ${res.status}`)
+    }
+    const data = await res.json().catch(() => ({} as any))
+    const list = Array.isArray(data?.sessions) ? data.sessions : []
+    const convs: Conversation[] = list.map((s: any) => ({
+      id: s.session_id,
+      title: s.session_name || 'New Chat',
+      timestamp: new Date(s.last_activity || s.time_stamp || Date.now()),
+    }))
+    // Sort by timestamp desc
+    convs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    return convs
+  }
+
+  // Helper: fetch session history and populate sessionModelMessages for that session
+  const fetchHistory = async (sessionId: string) => {
+    const res = await fetch(`http://127.0.0.1:8000/history/${sessionId}`, { headers: { accept: 'application/json' } })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `Failed to load history: ${res.status}`)
+    }
+    const data = await res.json().catch(() => ({} as any))
+    const history = Array.isArray(data?.history) ? data.history : []
+
+    // Build provider->modelId map from MODELS.providerKey
+    const providerToModelId: {[key: string]: string} = {}
+    MODELS.forEach(m => { if ((m as any).providerKey) providerToModelId[(m as any).providerKey] = m.id })
+
+    // Map backend keys to provider names
+    const keyToProvider: {[key: string]: string} = {
+      openai_messages: 'OpenAI',
+      google_messages: 'Google',
+      groq_messages: 'Groq',
+    }
+
+    // Initialize empty per-model messages
+    const perModel: ModelMessages = {}
+
+    // Only load the first history turn (index 0) into the UI
+    let idx = 0
+    const firstTurn = history[0] || {}
+    const makeTs = () => new Date(Date.now() - (1 - idx) * 1000)
+    Object.keys(keyToProvider).forEach(k => {
+      const provider = keyToProvider[k]
+      const modelId = providerToModelId[provider]
+      if (!modelId) return
+      const msgs = Array.isArray(firstTurn[k]) ? firstTurn[k] : []
+      msgs.forEach((m: any) => {
+        const role = String(m.role || '').toLowerCase() === 'user' ? 'user' : 'assistant'
+        const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+        const message: Message = {
+          id: `${sessionId}-${modelId}-${idx}-${role}`,
+          content,
+          role: role as 'user' | 'assistant',
+          timestamp: makeTs(),
+          model: modelId,
+        }
+        perModel[modelId] = [...(perModel[modelId] || []), message]
+        idx += 1
+      })
+    })
+
+    setSessionModelMessages(prev => ({ ...prev, [sessionId]: perModel }))
+    setSessionLoading(prev => ({ ...prev, [sessionId]: {} }))
+  }
+
+  // On mount, load sessions and pick the most recent; if none, create one
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const convs = await fetchSessions()
+        if (convs.length === 0) {
+          const sessionId = await createSession('New Chat')
+          const conv: Conversation = { id: sessionId, title: 'New Chat', timestamp: new Date() }
+          setConversations([conv])
+          setActiveConversationId(sessionId)
+        } else {
+          setConversations(convs)
+          setActiveConversationId(convs[0].id)
+          await fetchHistory(convs[0].id)
+        }
+      } catch (e) {
+        console.error('Initialization failed', e)
+      }
+    }
+    void init()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Messages and loading state are tracked per session (conversation) and per model
   const [sessionModelMessages, setSessionModelMessages] = useState<{ [sessionId: string]: ModelMessages }>({})
@@ -111,17 +216,20 @@ function App() {
   const currentModelMessages: ModelMessages = sessionModelMessages[activeSessionId] || {}
   const currentLoading: { [key: string]: boolean } = sessionLoading[activeSessionId] || {}
 
-  const handleNewChat = () => {
-    const newId = generateId()
-    const newConv: Conversation = {
-      id: newId,
-      session_id: newId,
-      title: 'New Chat',
-      timestamp: new Date(),
+  const handleNewChat = async () => {
+    try {
+      const title = 'New Chat'
+      const newId = await createSession(title)
+      const newConv: Conversation = {
+        id: newId,
+        title,
+        timestamp: new Date(),
+      }
+      setConversations(prev => [newConv, ...prev])
+      setActiveConversationId(newId)
+    } catch (e) {
+      console.error('Failed to create new session', e)
     }
-    setConversations(prev => [newConv, ...prev])
-    setActiveConversationId(newId)
-    console.log('New chat created', newConv)
   }
 
   // Broadcast a user message to all enabled models and fetch backend responses
@@ -275,7 +383,17 @@ function App() {
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
   const isAnyLoading = Object.values(currentLoading).some(Boolean)
 
-  const handleSelectConversation = (id: string) => setActiveConversationId(id)
+  const handleSelectConversation = async (id: string) => {
+    setActiveConversationId(id)
+    // Load history if we don't yet have messages for this session
+    if (!sessionModelMessages[id]) {
+      try {
+        await fetchHistory(id)
+      } catch (e) {
+        console.error('Failed to fetch history for session', id, e)
+      }
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gray-900">

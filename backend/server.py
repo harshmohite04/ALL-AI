@@ -9,8 +9,25 @@ from uuid import uuid4
 from pymongo import MongoClient
 import os
 
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
+origins = [
+    "http://localhost:5173",  # Vite dev
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",  # if using CRA/Next.js
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,       # or ["*"] for quick local testing
+    allow_credentials=True,
+    allow_methods=["*"],         # ensures OPTIONS, POST, DELETE, etc. are allowed
+    allow_headers=["*"],         # ensures Content-Type, Accept headers are allowed
+)
+
 
 MONGO_URI=os.getenv("MONGO_URI",)
 client = MongoClient(MONGO_URI)
@@ -31,15 +48,13 @@ def read_root():
 
 @app.post("/chat")
 def chat(input: APIInput):
-    
-    config ={"configurable": {"thread_id": input.session_id}}
-    # Prepare state with dynamic models
-    state = {
-        "openai_messages": [HumanMessage(content=input.user_query)],
-        "google_messages": [HumanMessage(content=input.user_query)],
-        "groq_messages": [HumanMessage(content=input.user_query)],
-        "selected_models": input.selected_models,  # directly use frontend input
-    }
+    config = {"configurable": {"thread_id": input.session_id}}
+
+    # Prepare state only for selected models
+    state = {"selected_models": input.selected_models}
+    for model_name in input.selected_models.keys():
+        key = f"{model_name.lower()}_messages"
+        state[key] = [HumanMessage(content=input.user_query)]
 
     # Run workflow
     result = workflow.invoke(state, config=config)
@@ -128,7 +143,6 @@ def get_sessions(account_id: str):
         raise HTTPException(status_code=404, detail="Account not found")
     return account
 
-
 @app.put("/session/update/{account_id}/{session_id}")
 def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):
     update_fields = {"last_activity": datetime.utcnow()}
@@ -144,6 +158,7 @@ def update_session(account_id: str, session_id: str, session_name: Optional[str]
         raise HTTPException(status_code=404, detail="Session not found")
 
     return {"message": "Session updated"}
+
 
 
 @app.delete("/session/{account_id}/{session_id}")
