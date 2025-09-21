@@ -21,16 +21,13 @@ interface SidebarProps {
   selectedVersions: {[key: string]: string}
   onVersionChange: (versions: {[key: string]: string}) => void
   enabledCount: number
+  conversations: Conversation[]
+  activeConversationId: string
+  onSelectConversation: (id: string) => void
+  onNewChat: () => void
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount }: SidebarProps) {
-  const [conversations] = useState<Conversation[]>([
-    { id: '1', title: 'Multi-Model Chat', timestamp: new Date() },
-    { id: '2', title: 'AI Comparison - React Help', timestamp: new Date(Date.now() - 86400000) },
-    { id: '3', title: 'All Models - CSS Questions', timestamp: new Date(Date.now() - 172800000) },
-  ])
-
-  const [activeConversation, setActiveConversation] = useState('1')
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat }: SidebarProps) {
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
@@ -62,7 +59,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             </h1>
           </div>
         </div>
-        <button className="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-3 transition-all duration-200">
+        <button onClick={onNewChat} className="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-3 transition-all duration-200">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -103,9 +100,9 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             {conversations.slice(0, 2).map((conversation) => (
               <button
                 key={conversation.id}
-                onClick={() => setActiveConversation(conversation.id)}
+                onClick={() => onSelectConversation(conversation.id)}
                 className={`w-full text-left p-2 rounded-lg transition-all duration-200 text-sm ${
-                  activeConversation === conversation.id
+                  activeConversationId === conversation.id
                     ? 'bg-gray-700 text-white'
                     : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
                 }`}
@@ -116,7 +113,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             <div className="pt-3">
               <div className="text-xs text-gray-400 mb-2">Yesterday</div>
               {conversations.slice(2).map((conversation) => (
-                <button key={conversation.id} className="w-full text-left p-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800/50 hover:text-white transition-all duration-200">
+                <button key={conversation.id} onClick={() => onSelectConversation(conversation.id)} className="w-full text-left p-2 rounded-lg text-sm text-gray-300 hover:bg-gray-800/50 hover:text-white transition-all duration-200">
                   <div className="truncate">{conversation.title}</div>
                 </button>
               ))}

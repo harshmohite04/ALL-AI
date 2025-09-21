@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import MultiModelChat from './components/MultiModelChat'
 import MessageInput from './components/MessageInput'
@@ -9,6 +9,13 @@ interface Message {
   role: 'user' | 'assistant'
   timestamp: Date
   model?: string
+}
+
+interface Conversation {
+  id: string // UI identifier for the conversation
+  session_id: string // stable unique session id for backend correlation
+  title: string
+  timestamp: Date
 }
 
 interface ModelMessages {
@@ -85,8 +92,37 @@ function App() {
     groq: 'openai/gpt-oss-20b'
   })
 
-  const [modelMessages, setModelMessages] = useState<ModelMessages>({})
-  const [isLoading, setIsLoading] = useState<{[key: string]: boolean}>({})
+  // Conversations and active conversation
+  const generateId = () => (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const initialSessionId = useMemo(() => generateId(), [])
+  const [conversations, setConversations] = useState<Conversation[]>([{
+    id: initialSessionId,
+    session_id: initialSessionId,
+    title: 'New Chat',
+    timestamp: new Date(),
+  }])
+  const [activeConversationId, setActiveConversationId] = useState<string>(initialSessionId)
+
+  // Messages and loading state are tracked per session (conversation) and per model
+  const [sessionModelMessages, setSessionModelMessages] = useState<{ [sessionId: string]: ModelMessages }>({})
+  const [sessionLoading, setSessionLoading] = useState<{ [sessionId: string]: { [modelId: string]: boolean } }>({})
+
+  const activeSessionId = activeConversationId
+  const currentModelMessages: ModelMessages = sessionModelMessages[activeSessionId] || {}
+  const currentLoading: { [key: string]: boolean } = sessionLoading[activeSessionId] || {}
+
+  const handleNewChat = () => {
+    const newId = generateId()
+    const newConv: Conversation = {
+      id: newId,
+      session_id: newId,
+      title: 'New Chat',
+      timestamp: new Date(),
+    }
+    setConversations(prev => [newConv, ...prev])
+    setActiveConversationId(newId)
+    console.log('New chat created', newConv)
+  }
 
   // Broadcast a user message to all enabled models and fetch backend responses
   const handleSendMessage = async (content: string) => {
@@ -100,15 +136,15 @@ function App() {
     }
 
     // Append user message to all enabled model threads
-    setModelMessages(prev => {
-      const updated = { ...prev }
+    setSessionModelMessages(prev => {
+      const sessionMsgs = { ...(prev[activeSessionId] || {}) }
       Object.keys(enabledModels).forEach(modelId => {
         if (enabledModels[modelId]) {
           const id = `${userMessage.id}-${modelId}`
-          updated[modelId] = [...(updated[modelId] || []), { ...userMessage, id }]
+          sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), { ...userMessage, id }]
         }
       })
-      return updated
+      return { ...prev, [activeSessionId]: sessionMsgs }
     })
 
     // Set loading only for enabled models
@@ -116,7 +152,7 @@ function App() {
     Object.keys(enabledModels).forEach(modelId => {
       if (enabledModels[modelId]) loadingState[modelId] = true
     })
-    setIsLoading(loadingState)
+    setSessionLoading(prev => ({ ...prev, [activeSessionId]: loadingState }))
 
     // Build selected_models payload from enabled models that have providerKey mapping
     const providerMap: {[key: string]: string} = {}
@@ -141,6 +177,7 @@ function App() {
         body: JSON.stringify({
           user_query: content,
           selected_models,
+          session_id: activeSessionId,
         })
       })
 
@@ -177,12 +214,13 @@ function App() {
           timestamp: new Date(),
           model: modelId
         }
-        setModelMessages(prev => ({
-          ...prev,
-          [modelId]: [...(prev[modelId] || []), assistantMessage]
-        }))
+        setSessionModelMessages(prev => {
+          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
+          return { ...prev, [activeSessionId]: sessionMsgs }
+        })
         processed[modelId] = true
-        setIsLoading(prev => ({ ...prev, [modelId]: false }))
+        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
       })
 
       // For any enabled model that didn't receive a response, stop loading and show a generic message
@@ -191,7 +229,7 @@ function App() {
         if (processed[modelId]) return
         if (!providerMap[modelId]) {
           // Not supported by backend; stop loading silently
-          setIsLoading(prev => ({ ...prev, [modelId]: false }))
+          setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
           return
         }
         const assistantMessage: Message = {
@@ -201,18 +239,19 @@ function App() {
           timestamp: new Date(),
           model: modelId
         }
-        setModelMessages(prev => ({
-          ...prev,
-          [modelId]: [...(prev[modelId] || []), assistantMessage]
-        }))
-        setIsLoading(prev => ({ ...prev, [modelId]: false }))
+        setSessionModelMessages(prev => {
+          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
+          return { ...prev, [activeSessionId]: sessionMsgs }
+        })
+        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
       })
     } catch (err: any) {
       // On error, append error message to all enabled and supported models
       Object.keys(enabledModels).forEach(modelId => {
         if (!enabledModels[modelId]) return
         if (!providerMap[modelId]) {
-          setIsLoading(prev => ({ ...prev, [modelId]: false }))
+          setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
           return
         }
         const assistantMessage: Message = {
@@ -222,17 +261,21 @@ function App() {
           timestamp: new Date(),
           model: modelId
         }
-        setModelMessages(prev => ({
-          ...prev,
-          [modelId]: [...(prev[modelId] || []), assistantMessage]
-        }))
-        setIsLoading(prev => ({ ...prev, [modelId]: false }))
+        setSessionModelMessages(prev => {
+          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
+          return { ...prev, [activeSessionId]: sessionMsgs }
+        })
+        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
       })
     }
   }
 
   const enabledModelsList = MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
+  const isAnyLoading = Object.values(currentLoading).some(Boolean)
+
+  const handleSelectConversation = (id: string) => setActiveConversationId(id)
 
   return (
     <div className="flex h-screen bg-gray-900">
@@ -244,13 +287,17 @@ function App() {
           selectedVersions={selectedVersions}
           onVersionChange={setSelectedVersions}
           enabledCount={enabledCount}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewChat={handleNewChat}
         />
       </div>
       <div className="flex-1 ml-64 relative h-screen overflow-hidden">
         <MultiModelChat 
           models={enabledModelsList}
-          modelMessages={modelMessages}
-          isLoading={isLoading}
+          modelMessages={currentModelMessages}
+          isLoading={currentLoading}
           selectedVersions={selectedVersions}
           onVersionChange={(modelId, version) => setSelectedVersions(prev => ({ ...prev, [modelId]: version }))}
           enabledModels={enabledModels}
@@ -262,7 +309,7 @@ function App() {
         <div className="fixed left-1/2 -translate-x-1/2 bottom-5 z-20 w-[min(900px,calc(100%-7rem))] floating-input-safe-area">
           <MessageInput 
             onSendMessage={handleSendMessage}
-            disabled={Object.values(isLoading).some(Boolean)}
+            disabled={isAnyLoading}
             enabledCount={enabledCount}
             variant="floating"
           />

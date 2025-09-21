@@ -1,11 +1,21 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel, Field
 from agent import workflow
 from langchain_core.messages import HumanMessage
-from typing import Dict
+from typing import Dict,Optional
+
+from datetime import datetime
+from uuid import uuid4
+from pymongo import MongoClient
+import os
+
 
 app = FastAPI()
 
+MONGO_URI=os.getenv("MONGO_URI",)
+client = MongoClient(MONGO_URI)
+db = client["LangGraphDB"]
+session_collection = db["sessionManagement"]
 
 class APIInput(BaseModel):
     user_query: str = Field(description="User query for the chat")
@@ -60,7 +70,96 @@ def get_history(session_id: str):
                     for msg in state[model_key]
                 ]
         output.append(step_messages)
+        
+    for i in history[0].values["openai_messages"]:    
+        print(i.content)
+    for i in history[0].values["google_messages"]:    
+        print(i.content)
+    for i in history[0].values["groq_messages"]:    
+        print(i.content)
+    # print(history[0].values["google_messages"])
+    # print(history[0].values["groq_messages"])
     return {"history": output}
+
+
+
+
+
+
+
+
+
+# Request model
+class SessionCreate(BaseModel):
+    account_id: str = Field(description="Unique account ID of the user")
+    session_name: str = Field(description="A friendly name for the session")
+
+
+@app.post("/session/create")
+def create_session(data: SessionCreate):
+    session_id = str(uuid4())
+    new_session = {
+        "session_id": session_id,
+        "session_name": data.session_name,
+        "time_stamp": datetime.utcnow(),
+        "last_activity": datetime.utcnow(),
+        "status": "active"
+    }
+
+    existing_account = session_collection.find_one({"account_id": data.account_id})
+    if existing_account:
+        session_collection.update_one(
+            {"account_id": data.account_id},
+            {"$push": {"sessions": new_session}}
+        )
+    else:
+        session_collection.insert_one({
+            "account_id": data.account_id,
+            "sessions": [new_session]
+        })
+
+    return {"message": "Session created", "session_id": session_id}
+
+
+@app.get("/session/{account_id}")
+def get_sessions(account_id: str):
+    account = session_collection.find_one({"account_id": account_id}, {"_id": 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return account
+
+
+@app.put("/session/update/{account_id}/{session_id}")
+def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):
+    update_fields = {"last_activity": datetime.utcnow()}
+    if session_name:
+        update_fields["sessions.$.session_name"] = session_name
+
+    result = session_collection.update_one(
+        {"account_id": account_id, "sessions.session_id": session_id},
+        {"$set": update_fields}
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"message": "Session updated"}
+
+
+@app.delete("/session/{account_id}/{session_id}")
+def delete_session(account_id: str, session_id: str):
+    result = session_collection.update_one(
+        {"account_id": account_id},
+        {"$pull": {"sessions": {"session_id": session_id}}}
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"message": "Session deleted"}
+
+
+
 
 
 

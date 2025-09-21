@@ -141,31 +141,31 @@ workflow = graph.compile(checkpointer=checkpointer)
 # print(result["google_messages"][-1].content)
 # print(result["groq_messages"][-1].content)
 
-history = list(workflow.get_state_history(config=config1))
+# history = list(workflow.get_state_history(config=config1))
 
-for i, step in enumerate(history, start=1):
-    if i==1:
-        print(f"\n=== Step {i} ===")
+# for i, step in enumerate(history, start=1):
+#     if i==1:
+#         print(f"\n=== Step {i} ===")
 
-        state = step.values
+#         state = step.values
 
-        if "openai_messages" in state:
-            print("OpenAI Messages:")
-            for msg in state["openai_messages"]:
-                role = "User" if msg.type == "human" else "AI"
-                print(f"  [{role}] {msg.content}")
+#         if "openai_messages" in state:
+#             print("OpenAI Messages:")
+#             for msg in state["openai_messages"]:
+#                 role = "User" if msg.type == "human" else "AI"
+#                 print(f"  [{role}] {msg.content}")
 
-        if "google_messages" in state:
-            print("Google Messages:")
-            for msg in state["google_messages"]:
-                role = "User" if msg.type == "human" else "AI"
-                print(f"  [{role}] {msg.content}")
+#         if "google_messages" in state:
+#             print("Google Messages:")
+#             for msg in state["google_messages"]:
+#                 role = "User" if msg.type == "human" else "AI"
+#                 print(f"  [{role}] {msg.content}")
 
-        if "groq_messages" in state:
-            print("Groq Messages:")
-            for msg in state["groq_messages"]:
-                role = "User" if msg.type == "human" else "AI"
-                print(f"  [{role}] {msg.content}")
+#         if "groq_messages" in state:
+#             print("Groq Messages:")
+#             for msg in state["groq_messages"]:
+#                 role = "User" if msg.type == "human" else "AI"
+#                 print(f"  [{role}] {msg.content}")
 
 
 # Initialize conversation state
