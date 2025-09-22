@@ -85,13 +85,6 @@ def get_history(session_id: str):
                     for msg in state[model_key]
                 ]
         output.append(step_messages)
-        
-    for i in history[0].values["openai_messages"]:    
-        print(i.content)
-    for i in history[0].values["google_messages"]:    
-        print(i.content)
-    for i in history[0].values["groq_messages"]:    
-        print(i.content)
     # print(history[0].values["google_messages"])
     # print(history[0].values["groq_messages"])
     return {"history": output}
