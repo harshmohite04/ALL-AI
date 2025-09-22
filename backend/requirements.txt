@@ -4,3 +4,5 @@ langchain_groq
 langchain_google_genai
 fastapi
 uvicorn
+dotenv
+langgraph-checkpoint-mongodb

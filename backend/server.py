@@ -74,6 +74,8 @@ def get_history(session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     history = list(workflow.get_state_history(config=config))
     
+    print("history")
+    
     output = []
     for step in history:
         state = step.values
@@ -86,12 +88,7 @@ def get_history(session_id: str):
                 ]
         output.append(step_messages)
         
-    for i in history[0].values["openai_messages"]:    
-        print(i.content)
-    for i in history[0].values["google_messages"]:    
-        print(i.content)
-    for i in history[0].values["groq_messages"]:    
-        print(i.content)
+   
     # print(history[0].values["google_messages"])
     # print(history[0].values["groq_messages"])
     return {"history": output}

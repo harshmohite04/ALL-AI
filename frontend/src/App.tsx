@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import MultiModelChat from './components/MultiModelChat'
 import MessageInput from './components/MessageInput'
+import { useAuth } from './auth/AuthContext'
 
 interface Message {
   id: string
@@ -75,6 +76,8 @@ const MODELS = [
 ]
 
 function App() {
+  const { token, user, openAuth } = useAuth()
+  const accountId = (user?.id || user?.email || '').trim()
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
     chatgpt: false,
     gemini: true,
@@ -121,9 +124,10 @@ function App() {
       headers: {
         accept: 'application/json',
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        account_id: 'harsh',
+        account_id: accountId,
         session_name,
         time_stamp: toLocalIsoWithOffset(nowLocal),
         last_activity: toLocalIsoWithOffset(nowLocal),
@@ -140,7 +144,7 @@ function App() {
 
   // Helper: fetch all sessions for the account and map to conversations
   const fetchSessions = async (): Promise<Conversation[]> => {
-    const res = await fetch('http://127.0.0.1:8000/session/harsh', { headers: { accept: 'application/json' } })
+    const res = await fetch(`http://127.0.0.1:8000/session/${encodeURIComponent(accountId)}`, { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(text || `Failed to load sessions: ${res.status}`)
@@ -171,7 +175,7 @@ function App() {
 
   // Helper: fetch session history and populate sessionModelMessages for that session
   const fetchHistory = async (sessionId: string) => {
-    const res = await fetch(`http://127.0.0.1:8000/history/${sessionId}`, { headers: { accept: 'application/json' } })
+    const res = await fetch(`http://127.0.0.1:8000/history/${sessionId}`, { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(text || `Failed to load history: ${res.status}`)
@@ -225,6 +229,7 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
+        if (!accountId) return
         const convs = await fetchSessions()
         if (convs.length === 0) {
           const sessionId = await createSession('New Chat')
@@ -242,7 +247,7 @@ function App() {
     }
     void init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [accountId])
 
   // Messages and loading state are tracked per session (conversation) and per model
   const [sessionModelMessages, setSessionModelMessages] = useState<{ [sessionId: string]: ModelMessages }>({})
@@ -253,6 +258,10 @@ function App() {
   const currentLoading: { [key: string]: boolean } = sessionLoading[activeSessionId] || {}
 
   const handleNewChat = async () => {
+    if (!token || !accountId) {
+      openAuth('signin')
+      return
+    }
     try {
       const title = 'New Chat'
       const newId = await createSession(title)
@@ -270,6 +279,11 @@ function App() {
 
   // Broadcast a user message to all enabled models and fetch backend responses
   const handleSendMessage = async (content: string) => {
+    // Soft-guard: require auth to send messages
+    if (!token) {
+      openAuth('signin')
+      return
+    }
     const timestamp = new Date()
 
     const userMessage: Message = {
@@ -317,6 +331,7 @@ function App() {
         headers: {
           'accept': 'application/json',
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           user_query: content,
@@ -425,8 +440,8 @@ function App() {
     // Update last_activity when user continues a session
     try {
       const nowLocal = new Date()
-      const url = `http://127.0.0.1:8000/session/update/harsh/${encodeURIComponent(id)}?last_activity=${encodeURIComponent(toLocalIsoWithOffset(nowLocal))}`
-      void fetch(url, { method: 'PUT', headers: { accept: 'application/json' } }).catch(() => {})
+      const url = `http://127.0.0.1:8000/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?last_activity=${encodeURIComponent(toLocalIsoWithOffset(nowLocal))}`
+      void fetch(url, { method: 'PUT', headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } }).catch(() => {})
       // Do not reorder locally on selection; ordering will change only when last_activity changes take effect.
     } catch {}
     // Load history if we don't yet have messages for this session
@@ -442,10 +457,10 @@ function App() {
   // Rename a session via backend and update local state
   const handleRenameConversation = async (id: string, newTitle: string) => {
     try {
-      const url = `http://127.0.0.1:8000/session/update/harsh/${encodeURIComponent(id)}?session_name=${encodeURIComponent(newTitle)}`
+      const url = `http://127.0.0.1:8000/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?session_name=${encodeURIComponent(newTitle)}`
       const res = await fetch(url, {
         method: 'PUT',
-        headers: { accept: 'application/json' },
+        headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
@@ -461,10 +476,10 @@ function App() {
   // Delete a session via backend and update local state
   const handleDeleteConversation = async (id: string) => {
     try {
-      const url = `http://127.0.0.1:8000/session/harsh/${encodeURIComponent(id)}`
+      const url = `http://127.0.0.1:8000/session/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}`
       const res = await fetch(url, {
         method: 'DELETE',
-        headers: { accept: 'application/json' },
+        headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')

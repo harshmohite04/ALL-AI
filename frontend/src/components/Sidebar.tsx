@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '../auth/AuthContext'
 
 interface Conversation {
   id: string
@@ -30,6 +31,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation }: SidebarProps) {
+  const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
@@ -271,11 +273,37 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-700/50">
-        <div className="text-xs text-gray-400 mb-2">Free Plan</div>
-        <div className="text-xs text-gray-500">Message limit reached</div>
-        <button className="w-full mt-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200">
-          Upgrade plan
-        </button>
+        {/* Account section */}
+        {!user ? (
+          <div className="space-y-2">
+            <div className="text-xs text-gray-400">You are not signed in</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => openAuth('signin')}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => openAuth('signup')}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs text-gray-300 truncate">{user.name || user.email}</div>
+            <button
+              onClick={() => { if (!isLoading) signOut().catch(()=>{}) }}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200 disabled:opacity-60"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing out…' : 'Sign Out'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
