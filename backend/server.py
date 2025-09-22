@@ -14,15 +14,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 origins = [
-    "http://localhost:5173",  # Vite dev
+    # Local dev
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:3000",  # if using CRA/Next.js
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Deployed frontend (IP)
+    "http://35.238.224.160",
+    "https://35.238.224.160",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # or ["*"] for quick local testing
+    allow_origins=origins,       # switch to ["*"] if you need to quickly test any origin
     allow_credentials=True,
     allow_methods=["*"],         # ensures OPTIONS, POST, DELETE, etc. are allowed
     allow_headers=["*"],         # ensures Content-Type, Accept headers are allowed
@@ -45,6 +49,10 @@ class APIInput(BaseModel):
 @app.get("/")
 def read_root():
     return {"message": "Multi-Model Chat API is running 🚀"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.post("/chat")
 def chat(input: APIInput):
@@ -109,6 +117,11 @@ class SessionCreate(BaseModel):
 
 @app.post("/session/create")
 def create_session(data: SessionCreate):
+    # Minimal logging to verify requests in server logs
+    try:
+        print(f"[session/create] account_id={data.account_id} name={data.session_name} time={data.time_stamp}")
+    except Exception:
+        pass
     session_id = str(uuid4())
     new_session = {
         "session_id": session_id,
