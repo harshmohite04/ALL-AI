@@ -23,6 +23,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const STORAGE_KEY = 'allai_auth_v1'
 
+// Base URL for API calls. In development, the Vite proxy can be used with empty base.
+// In production, set VITE_API_BASE_URL to your backend URL, e.g. https://api.example.com
+const API_BASE = (import.meta as any)?.env?.VITE_API_BASE_URL?.replace(/\/$/, '') || ''
+
+function apiUrl(path: string) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE}${cleanPath}`
+}
+
 function loadFromStorage(): { token: string | null; user: User | null } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -59,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/auth/signin', {
+      const res = await fetch(apiUrl('/api/auth/signin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -80,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = useCallback(async (name: string, email: string, password: string) => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/auth/signup', {
+      const res = await fetch(apiUrl('/api/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password })
