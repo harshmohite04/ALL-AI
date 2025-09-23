@@ -8,7 +8,7 @@ import { useAuth } from './auth/AuthContext'
 // In dev, Vite proxy can be used if left empty and you call relative paths like '/chat' and '/session/...'.
 // In production, set VITE_CHAT_BASE_URL to the external URL (e.g., https://your-host or http://35.238.224.160:8000).
 // By default, call FastAPI directly on localhost:8000
-const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || 'http://127.0.0.1:8000'
+const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || 'http://35.238.224.160:8000'
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
 
 interface Message {
