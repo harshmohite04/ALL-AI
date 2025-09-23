@@ -12,8 +12,18 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/session': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/history': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
-        target: 'http://127.0.0.1:4000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
       },

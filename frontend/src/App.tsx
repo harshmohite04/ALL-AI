@@ -5,10 +5,9 @@ import MessageInput from './components/MessageInput'
 import { useAuth } from './auth/AuthContext'
 
 // Base URL for FastAPI chat/session service.
-// In dev, Vite proxy can be used if left empty and you call relative paths like '/chat' and '/session/...'.
-// In production, set VITE_CHAT_BASE_URL to the external URL (e.g., https://your-host or http://35.238.224.160:8000).
-// By default, call FastAPI directly on localhost:8000
-const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || 'http://35.238.224.160:8000'
+// In dev, leave empty so Vite proxy handles relative paths like '/chat', '/session', '/history'.
+// In production, set VITE_CHAT_BASE_URL to your backend URL (e.g., https://your-host or http://35.238.224.160:8000).
+const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || ''
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
 
 interface Message {
