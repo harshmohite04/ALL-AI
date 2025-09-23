@@ -4,6 +4,12 @@ import MultiModelChat from './components/MultiModelChat'
 import MessageInput from './components/MessageInput'
 import { useAuth } from './auth/AuthContext'
 
+// Base URL for FastAPI chat/session service.
+// In dev, Vite proxy can be used if left empty and you call relative paths like '/chat' and '/session/...'.
+// In production, set VITE_CHAT_BASE_URL to the external URL (e.g., https://your-host or http://35.238.224.160:8000).
+const CHAT_BASE = (import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '') || ''
+const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
+
 interface Message {
   id: string
   content: string
@@ -119,7 +125,7 @@ function App() {
   // Helper to create a session via backend and return the session_id
   const createSession = async (session_name: string): Promise<string> => {
     const nowLocal = new Date()
-    const res = await fetch('http://127.0.0.1:8000/session/create', {
+    const res = await fetch(chatUrl('/session/create'), {
       method: 'POST',
       headers: {
         accept: 'application/json',
@@ -144,7 +150,7 @@ function App() {
 
   // Helper: fetch all sessions for the account and map to conversations
   const fetchSessions = async (): Promise<Conversation[]> => {
-    const res = await fetch(`http://127.0.0.1:8000/session/${encodeURIComponent(accountId)}`, { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    const res = await fetch(chatUrl(`/session/${encodeURIComponent(accountId)}`), { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(text || `Failed to load sessions: ${res.status}`)
@@ -175,7 +181,7 @@ function App() {
 
   // Helper: fetch session history and populate sessionModelMessages for that session
   const fetchHistory = async (sessionId: string) => {
-    const res = await fetch(`http://127.0.0.1:8000/history/${sessionId}`, { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    const res = await fetch(chatUrl(`/history/${sessionId}`), { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(text || `Failed to load history: ${res.status}`)
@@ -326,7 +332,7 @@ function App() {
     })
 
     try {
-      const res = await fetch('/chat', {
+      const res = await fetch(chatUrl('/chat'), {
         method: 'POST',
         headers: {
           'accept': 'application/json',
@@ -440,7 +446,7 @@ function App() {
     // Update last_activity when user continues a session
     try {
       const nowLocal = new Date()
-      const url = `http://127.0.0.1:8000/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?last_activity=${encodeURIComponent(toLocalIsoWithOffset(nowLocal))}`
+      const url = chatUrl(`/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?last_activity=${encodeURIComponent(toLocalIsoWithOffset(nowLocal))}`)
       void fetch(url, { method: 'PUT', headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } }).catch(() => {})
       // Do not reorder locally on selection; ordering will change only when last_activity changes take effect.
     } catch {}
@@ -457,7 +463,7 @@ function App() {
   // Rename a session via backend and update local state
   const handleRenameConversation = async (id: string, newTitle: string) => {
     try {
-      const url = `http://127.0.0.1:8000/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?session_name=${encodeURIComponent(newTitle)}`
+      const url = chatUrl(`/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}?session_name=${encodeURIComponent(newTitle)}`)
       const res = await fetch(url, {
         method: 'PUT',
         headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -476,7 +482,7 @@ function App() {
   // Delete a session via backend and update local state
   const handleDeleteConversation = async (id: string) => {
     try {
-      const url = `http://127.0.0.1:8000/session/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}`
+      const url = chatUrl(`/session/${encodeURIComponent(accountId)}/${encodeURIComponent(id)}`)
       const res = await fetch(url, {
         method: 'DELETE',
         headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
