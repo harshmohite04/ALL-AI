@@ -30,6 +30,6 @@ app.get('/api/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes)
 
-app.listen(PORT, () => {
+app.listen(PORT,'0.0.0.0' ,() => {
   console.log(`Backend listening on http://127.0.0.1:${PORT}`)
 })
