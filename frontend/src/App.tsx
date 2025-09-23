@@ -7,7 +7,8 @@ import { useAuth } from './auth/AuthContext'
 // Base URL for FastAPI chat/session service.
 // In dev, Vite proxy can be used if left empty and you call relative paths like '/chat' and '/session/...'.
 // In production, set VITE_CHAT_BASE_URL to the external URL (e.g., https://your-host or http://35.238.224.160:8000).
-const CHAT_BASE = (import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '') || ''
+// By default, call FastAPI directly on localhost:8000
+const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || 'http://127.0.0.1:8000'
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
 
 interface Message {
@@ -83,7 +84,7 @@ const MODELS = [
 
 function App() {
   const { token, user, openAuth } = useAuth()
-  const accountId = (user?.id || user?.email || '').trim()
+  const accountId = (user?.email || user?.id || '').trim()
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
     chatgpt: false,
     gemini: true,
@@ -151,6 +152,10 @@ function App() {
   // Helper: fetch all sessions for the account and map to conversations
   const fetchSessions = async (): Promise<Conversation[]> => {
     const res = await fetch(chatUrl(`/session/${encodeURIComponent(accountId)}`), { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    if (res.status === 404) {
+      // Account not found yet means no sessions created
+      return []
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(text || `Failed to load sessions: ${res.status}`)

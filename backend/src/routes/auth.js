@@ -4,7 +4,10 @@ import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
 
 const router = Router()
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me'
+const JWT_SECRET = process.env.JWT_SECRET || 'insecure_dev_secret_change_me'
+if (!process.env.JWT_SECRET) {
+  console.warn('[auth] WARNING: JWT_SECRET is not set in environment. Using an insecure development secret. Set JWT_SECRET in your .env for security.')
+}
 
 router.post('/signup', async (req, res) => {
   try {
@@ -17,7 +20,7 @@ router.post('/signup', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10)
     const user = await User.create({ name, email, passwordHash })
 
-    const token = jwt.sign({ sub: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
+    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email }, JWT_SECRET, { expiresIn: '7d' })
     res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name } })
   } catch (e) {
     console.error(e)
@@ -36,7 +39,7 @@ router.post('/signin', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash)
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
 
-    const token = jwt.sign({ sub: user._id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
+    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email }, JWT_SECRET, { expiresIn: '7d' })
     res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name } })
   } catch (e) {
     console.error(e)
@@ -45,3 +48,4 @@ router.post('/signin', async (req, res) => {
 })
 
 export default router
+

@@ -8,6 +8,7 @@ from datetime import datetime
 from uuid import uuid4
 from pymongo import MongoClient
 import os
+import re
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,7 +34,8 @@ app.add_middleware(
 )
 
 
-MONGO_URI=os.getenv("MONGO_URI",)
+# Use a safe default for local development if MONGO_URI is not set
+MONGO_URI = os.getenv("MONGO_URI") or "mongodb://127.0.0.1:27017"
 client = MongoClient(MONGO_URI)
 db = client["LangGraphDB"]
 session_collection = db["sessionManagement"]
@@ -109,10 +111,18 @@ def get_history(session_id: str):
 
 
 class SessionCreate(BaseModel):
-    account_id: str = Field(description="Unique account ID of the user")
+    account_id: str = Field(description="Email address of the user (used as account_id)")
     session_name: str = Field(description="A friendly name for the session")
     time_stamp: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Client-side timestamp")
     last_activity: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Client-side last activity timestamp")
+
+def is_valid_email(email: str) -> bool:
+    if not isinstance(email, str):
+        return False
+    email = email.strip()
+    # Simple RFC 5322-like email pattern (not exhaustive, but good enough for validation here)
+    pattern = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+    return re.match(pattern, email) is not None
 
 
 @app.post("/session/create")
@@ -122,6 +132,10 @@ def create_session(data: SessionCreate):
         print(f"[session/create] account_id={data.account_id} name={data.session_name} time={data.time_stamp}")
     except Exception:
         pass
+    # Validate and normalize email
+    if not is_valid_email(data.account_id):
+        raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    normalized_email = data.account_id.strip().lower()
     session_id = str(uuid4())
     new_session = {
         "session_id": session_id,
@@ -131,15 +145,15 @@ def create_session(data: SessionCreate):
         "status": "active"
     }
 
-    existing_account = session_collection.find_one({"account_id": data.account_id})
+    existing_account = session_collection.find_one({"account_id": normalized_email})
     if existing_account:
         session_collection.update_one(
-            {"account_id": data.account_id},
+            {"account_id": normalized_email},
             {"$push": {"sessions": new_session}}
         )
     else:
         session_collection.insert_one({
-            "account_id": data.account_id,
+            "account_id": normalized_email,
             "sessions": [new_session]
         })
 
@@ -148,19 +162,26 @@ def create_session(data: SessionCreate):
 
 @app.get("/session/{account_id}")
 def get_sessions(account_id: str):
-    account = session_collection.find_one({"account_id": account_id}, {"_id": 0})
+    # Validate and normalize email
+    if not is_valid_email(account_id):
+        raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    normalized_email = account_id.strip().lower()
+    account = session_collection.find_one({"account_id": normalized_email}, {"_id": 0})
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
 
 @app.put("/session/update/{account_id}/{session_id}")
 def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):
+    if not is_valid_email(account_id):
+        raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    normalized_email = account_id.strip().lower()
     update_fields = {"last_activity": datetime.utcnow()}
     if session_name:
         update_fields["sessions.$.session_name"] = session_name
 
     result = session_collection.update_one(
-        {"account_id": account_id, "sessions.session_id": session_id},
+        {"account_id": normalized_email, "sessions.session_id": session_id},
         {"$set": update_fields}
     )
 
@@ -173,8 +194,11 @@ def update_session(account_id: str, session_id: str, session_name: Optional[str]
 
 @app.delete("/session/{account_id}/{session_id}")
 def delete_session(account_id: str, session_id: str):
+    if not is_valid_email(account_id):
+        raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    normalized_email = account_id.strip().lower()
     result = session_collection.update_one(
-        {"account_id": account_id},
+        {"account_id": normalized_email},
         {"$pull": {"sessions": {"session_id": session_id}}}
     )
 

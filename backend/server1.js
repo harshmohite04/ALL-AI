@@ -10,12 +10,13 @@ const app = express()
 app.use(cors({ origin: '*'}))
 app.use(express.json())
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/allai'
-console.log(MONGO_URI)
-const PORT = process.env.PORT || 4000
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017'
+const DB_NAME = 'LangGraphDB'
+console.log('Using Mongo URI:', MONGO_URI, 'DB:', DB_NAME)
+const PORT = process.env.PORT || 5000
 
 // Connect to Mongo
-mongoose.connect(MONGO_URI).then(() => {
+mongoose.connect(MONGO_URI, { dbName: DB_NAME }).then(() => {
   console.log('MongoDB connected')
 }).catch((err) => {
   console.error('MongoDB connection error:', err)
