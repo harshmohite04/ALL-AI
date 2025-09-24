@@ -15,5 +15,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.7.0",
     "nodemon": "^3.1.10"
-  }
+  },
+  "description": "This backend provides authentication for the ALL-AI frontend using JWT and MongoDB.",
+  "main": "server1.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

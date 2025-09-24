@@ -1,6 +1,8 @@
 import AppleSelect from './AppleSelect'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useEffect, useRef, useState } from 'react'
+import type React from 'react'
 
 interface Message {
   id: string
@@ -32,6 +34,133 @@ interface MultiModelChatProps {
 }
 
 export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel }: MultiModelChatProps) {
+  // Default column width in pixels (Tailwind w-96 = 384px)
+  const DEFAULT_WIDTH = 384
+  const MIN_WIDTH = 260
+  const MAX_WIDTH = 900
+
+  // Persist widths per model in localStorage
+  const [widths, setWidths] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem('mmc_widths')
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return {}
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mmc_widths', JSON.stringify(widths))
+    } catch {}
+  }, [widths])
+
+  // Active drag state
+  const draggingRef = useRef<{ id: string; startX: number; startWidth: number } | null>(null)
+
+  const onMouseMove = (e: MouseEvent) => {
+    const drag = draggingRef.current
+    if (!drag) return
+    const delta = e.clientX - drag.startX
+    const next = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, drag.startWidth + delta))
+    setWidths((prev) => ({ ...prev, [drag.id]: next }))
+  }
+
+  // Refs to each model's scroll container
+  const listRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const scrollToBottom = (id: string, smooth = true) => {
+    const el = listRefs.current[id]
+    if (!el) return
+    try {
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+    } catch {
+      el.scrollTop = el.scrollHeight
+    }
+  }
+
+  // Auto-scroll when messages or loading state change
+  useEffect(() => {
+    Object.keys(modelMessages).forEach((id) => scrollToBottom(id))
+  }, [modelMessages])
+  useEffect(() => {
+    Object.keys(isLoading).forEach((id) => isLoading[id] && scrollToBottom(id))
+  }, [isLoading])
+
+  // Typewriter component for the latest assistant message
+  const TypewriterMarkdown: React.FC<{ text: string; onTick?: () => void; speed?: number }> = ({ text, onTick, speed = 18 }) => {
+    const [len, setLen] = useState(0)
+    useEffect(() => {
+      setLen(0)
+      let raf: number
+      let last = performance.now()
+      const step = (now: number) => {
+        const delta = now - last
+        const inc = Math.max(1, Math.floor(delta / speed))
+        if (len + inc >= text.length) {
+          setLen(text.length)
+          onTick?.()
+          return
+        }
+        setLen((l) => {
+          const next = Math.min(text.length, l + inc)
+          onTick?.()
+          return next
+        })
+        last = now
+        raf = requestAnimationFrame(step)
+      }
+      raf = requestAnimationFrame(step)
+      return () => cancelAnimationFrame(raf)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [text])
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {text.slice(0, len)}
+      </ReactMarkdown>
+    )
+  }
+
+  const endDrag = () => {
+    draggingRef.current = null
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', endDrag)
+  }
+
+  const startDrag = (id: string, ev: React.MouseEvent<HTMLDivElement>) => {
+    const current = widths[id] ?? DEFAULT_WIDTH
+    draggingRef.current = { id, startX: ev.clientX, startWidth: current }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', endDrag)
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', endDrag)
+    }
+  }, [])
+  
+  // Copy to clipboard feedback state
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const handleCopy = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 1500)
+    } catch {
+      // Fallback for environments without clipboard API
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 1500)
+    }
+  }
   const getModelColor = (color: string) => {
     const colors = {
       green: 'bg-green-500',
@@ -55,11 +184,17 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
   // Removed unused getModelBorderColor function
 
+  const equalMode = models.length <= 3
+
   return (
     <div className="flex-1 overflow-hidden bg-gray-900 h-full">
-      <div className="h-full flex overflow-x-auto horizontal-scroll min-h-0 items-stretch">
+      <div className={`h-full flex ${equalMode ? 'overflow-x-hidden' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}>
         {models.map((model) => (
-          <div key={model.id} className={`w-96 flex-shrink-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}>
+          <div
+            key={model.id}
+            className={`relative ${equalMode ? 'flex-1 min-w-0' : 'flex-shrink-0'} flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
+            style={equalMode ? undefined : { width: (widths[model.id] ?? DEFAULT_WIDTH) + 'px' }}
+          >
             {/* Model Header */}
             <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between border-b border-gray-700/50">
               <div className="flex items-center gap-3">
@@ -70,13 +205,12 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                     <span className="text-sm">{model.icon}</span>
                   </div>
                 )}
-                <div>
-                  <h3 className="font-medium text-sm text-white">{model.name}</h3>
-                </div>
+                <div className="w-28 truncate"><h3 className="font-medium text-sm text-white">{model.name}</h3></div>
               </div>
               <div className="flex items-center gap-2">
                 {/* Version selector in header (Apple-style) */}
                 <AppleSelect
+                  className="w-40"
                   options={(model as any).versions?.map((v: string) => ({ label: v, value: v })) ?? []}
                   value={selectedVersions[model.id]}
                   onChange={(val) => onVersionChange(model.id, val)}
@@ -94,9 +228,12 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gray-900 min-h-0 overscroll-contain">
+            <div
+              ref={(el) => (listRefs.current[model.id] = el)}
+              className="flex-1 overflow-y-auto p-4 pb-28 bg-gray-900 min-h-0 overscroll-contain"
+            >
               <div className="space-y-4">
-                {modelMessages[model.id]?.map((message) => (
+                {modelMessages[model.id]?.map((message, idx, arr) => (
                   <div key={message.id} className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
                     {message.role === 'user' && (
                       <div className="flex items-start gap-3 mb-4">
@@ -163,47 +300,65 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                         )}
                         <div className="flex-1">
                           <div className="text-sm text-gray-300 leading-relaxed break-words">
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code({ inline, className, children, ...props }: any) {
-                                  if (!inline) {
+                            {(idx === arr.length - 1 && message.animate) ? (
+                              <TypewriterMarkdown
+                                text={message.content}
+                                onTick={() => scrollToBottom(model.id, false)}
+                              />
+                            ) : (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  code({ inline, className, children, ...props }: any) {
+                                    if (!inline) {
+                                      return (
+                                        <pre className="bg-[#151515] text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
+                                          <code className={className} {...props}>{children}</code>
+                                        </pre>
+                                      )
+                                    }
                                     return (
-                                      <pre className="bg-[#151515] text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
-                                        <code className={className} {...props}>{children}</code>
-                                      </pre>
+                                      <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
                                     )
+                                  },
+                                  table({ children }: any) {
+                                    return (
+                                      <div className="w-full overflow-x-auto my-3">
+                                        <table className="min-w-full border border-gray-700 text-sm">{children}</table>
+                                      </div>
+                                    )
+                                  },
+                                  thead({ children }: any) {
+                                    return <thead className="bg-gray-800">{children}</thead>
+                                  },
+                                  th({ children }: any) {
+                                    return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
+                                  },
+                                  td({ children }: any) {
+                                    return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
                                   }
-                                  return (
-                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
-                                  )
-                                },
-                                table({ children }: any) {
-                                  return (
-                                    <div className="w-full overflow-x-auto my-3">
-                                      <table className="min-w-full border border-gray-700 text-sm">{children}</table>
-                                    </div>
-                                  )
-                                },
-                                thead({ children }: any) {
-                                  return <thead className="bg-gray-800">{children}</thead>
-                                },
-                                th({ children }: any) {
-                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
-                                },
-                                td({ children }: any) {
-                                  return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
-                                }
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 mt-3">
-                            <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
+                            <button
+                              className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs"
+                              onClick={() => handleCopy(message.content, message.id)}
+                              aria-label="Copy response"
+                              title={copiedId === message.id ? 'Copied!' : 'Copy'}
+                            >
+                              {copiedId === message.id ? (
+                                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              )}
                             </button>
                             <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,6 +397,17 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                 )}
               </div>
             </div>
+
+            {/* Right-edge drag handle (hidden in equalMode) */}
+            {!equalMode && (
+              <div
+                role="separator"
+                aria-label={`Resize ${model.name} panel`}
+                aria-orientation="vertical"
+                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-gray-500/30"
+                onMouseDown={(e) => startDrag(model.id, e)}
+              />
+            )}
           </div>
         ))}
       </div>

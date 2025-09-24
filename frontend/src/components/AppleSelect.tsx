@@ -100,9 +100,9 @@ export default function AppleSelect({ options, value, onChange, ariaLabel, class
           setOpen(o => !o)
         }}
         onKeyDown={onKeyDown}
-        className="flex items-center gap-2 rounded-xl px-3 py-1.5 bg-gradient-to-b from-gray-700/70 to-gray-800/80 text-gray-100 border border-white/10 shadow-sm hover:from-gray-600/70 hover:to-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500/60 backdrop-blur-md transition-colors"
+        className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-1.5 bg-gradient-to-b from-gray-700/70 to-gray-800/80 text-gray-100 border border-white/10 shadow-sm hover:from-gray-600/70 hover:to-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500/60 backdrop-blur-md transition-colors"
       >
-        <span className="text-[11px] font-medium">{selected?.label}</span>
+        <span className="text-[11px] font-medium truncate">{selected?.label}</span>
         <svg className={`w-3.5 h-3.5 text-gray-300 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111 1.12l-4.21 3.64a.75.75 0 01-1 0L5.21 8.35a.75.75 0 01.02-1.14z" clipRule="evenodd" />
         </svg>

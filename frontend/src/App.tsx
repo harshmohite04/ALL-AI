@@ -16,6 +16,7 @@ interface Message {
   role: 'user' | 'assistant'
   timestamp: Date
   model?: string
+  animate?: boolean
 }
 
 interface Conversation {
@@ -225,6 +226,7 @@ function App() {
           role: role as 'user' | 'assistant',
           timestamp: makeTs(),
           model: modelId,
+          animate: false,
         }
         perModel[modelId] = [...(perModel[modelId] || []), message]
         idx += 1
@@ -382,7 +384,8 @@ function App() {
           content: contentText,
           role: 'assistant',
           timestamp: new Date(),
-          model: modelId
+          model: modelId,
+          animate: true,
         }
         setSessionModelMessages(prev => {
           const sessionMsgs = { ...(prev[activeSessionId] || {}) }
@@ -407,7 +410,8 @@ function App() {
           content: 'No response received for this model.',
           role: 'assistant',
           timestamp: new Date(),
-          model: modelId
+          model: modelId,
+          animate: true,
         }
         setSessionModelMessages(prev => {
           const sessionMsgs = { ...(prev[activeSessionId] || {}) }
@@ -429,7 +433,8 @@ function App() {
           content: `Error contacting backend: ${err?.message || String(err)}`,
           role: 'assistant',
           timestamp: new Date(),
-          model: modelId
+          model: modelId,
+          animate: true,
         }
         setSessionModelMessages(prev => {
           const sessionMsgs = { ...(prev[activeSessionId] || {}) }
@@ -551,8 +556,8 @@ function App() {
         />
         {/* Bottom overlay to mask page edge when horizontally scrolled (exclude sidebar area) */}
         <div className="fixed left-64 right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent" />
-        {/* Floating global input */}
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-5 z-20 w-[min(900px,calc(100%-7rem))] floating-input-safe-area">
+        {/* Floating global input - anchored within the main content area (avoids overlapping sidebar footer) */}
+        <div className="fixed left-64 right-4 bottom-5 z-20 max-w-[1100px] mx-auto floating-input-safe-area">
           <MessageInput 
             onSendMessage={handleSendMessage}
             disabled={isAnyLoading}
