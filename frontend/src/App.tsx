@@ -549,8 +549,8 @@ function App() {
           enabledModels={enabledModels}
           onToggleModel={setEnabledModels}
         />
-        {/* Bottom overlay to mask page edge when horizontally scrolled */}
-        <div className="fixed left-0 right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent" />
+        {/* Bottom overlay to mask page edge when horizontally scrolled (exclude sidebar area) */}
+        <div className="fixed left-64 right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent" />
         {/* Floating global input */}
         <div className="fixed left-1/2 -translate-x-1/2 bottom-5 z-20 w-[min(900px,calc(100%-7rem))] floating-input-safe-area">
           <MessageInput 

@@ -129,6 +129,33 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
     return () => document.removeEventListener('keydown', onKey)
   }, [pendingDelete])
 
+  // User profile menu state (bottom-left like ChatGPT)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const userBtnRef = useRef<HTMLButtonElement | null>(null)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      if (userBtnRef.current?.contains(t)) return
+      if (userMenuRef.current?.contains(t)) return
+      setIsUserMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsUserMenuOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
+  // Avatar helpers
+  const displayName = user?.name || user?.email || 'Guest'
+  const initials = (user?.name || user?.email || '?').split(/\s|@/)[0].slice(0, 2).toUpperCase()
+  const avatarUrl = (user as any)?.photoURL || (user as any)?.avatar || ''
+  const email = user?.email || ''
+
   return (
     <div className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col h-full shadow-2xl">
       {/* Header */}
@@ -271,37 +298,78 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-700/50">
-        {/* Account section */}
+      {/* Footer - Profile section (ChatGPT-like) */}
+      <div className="p-3 border-t border-gray-700/50 relative bg-gray-900/95">
         {!user ? (
-          <div className="space-y-2">
-            <div className="text-xs text-gray-400">You are not signed in</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => openAuth('signin')}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => openAuth('signup')}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200"
-              >
-                Create
-              </button>
+          <div className="flex items-center gap-3">
+            {/* Placeholder avatar */}
+            <div className="h-9 w-9 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-200">{initials || 'G'}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-300 truncate">Guest</div>
+              <div className="text-[10px] text-gray-400 truncate">Not signed in</div>
             </div>
+            <button
+              onClick={() => openAuth('signin')}
+              className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
+            >
+              Sign In
+            </button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="text-xs text-gray-300 truncate">{user.name || user.email}</div>
+          <div className="relative">
             <button
-              onClick={() => { if (!isLoading) signOut().catch(()=>{}) }}
-              className="w-full bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs transition-all duration-200 disabled:opacity-60"
-              disabled={isLoading}
+              ref={userBtnRef}
+              onClick={() => setIsUserMenuOpen(v => !v)}
+              className="group w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/70 transition-all duration-150 hover:ring-1 hover:ring-gray-600/70"
+              aria-haspopup="menu"
+              aria-expanded={isUserMenuOpen}
             >
-              {isLoading ? 'Signing out…' : 'Sign Out'}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center text-xs font-semibold text-white ring-1 ring-white/10">
+                  {initials}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-sm text-white font-medium truncate">{displayName}</div>
+                {email ? (
+                  <div className="text-[11px] text-gray-300 truncate">{email}</div>
+                ) : (
+                  <div className="text-[11px] text-gray-300 truncate">Account</div>
+                )}
+              </div>
+              <svg className={`h-4 w-4 text-gray-400 transition-transform duration-150 ${isUserMenuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
             </button>
+
+            {isUserMenuOpen && (
+              <div
+                ref={userMenuRef}
+                role="menu"
+                className="absolute bottom-12 left-2 right-2 z-30 origin-bottom rounded-lg border border-gray-700/60 bg-gray-900 shadow-2xl p-1 animate-[fadeIn_.15s_ease-out]"
+                style={{
+                  // Fallback keyframes in case Tailwind config lacks custom animations
+                  animation: 'fadeIn .15s ease-out',
+                }}
+              >
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 rounded-md hover:bg-gray-700/60 transition-colors" role="menuitem">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-gray-700/60 text-[10px]">⚙️</span>
+                  Settings
+                </button>
+                <div className="my-1 h-px bg-gray-700/60" />
+                <button
+                  onClick={() => { if (!isLoading) signOut().catch(()=>{}) }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-md text-red-300 hover:bg-gray-700/60 hover:text-red-200 transition-colors disabled:opacity-60"
+                  role="menuitem"
+                  disabled={isLoading}
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-red-900/30 text-[10px]">⎋</span>
+                  {isLoading ? 'Signing out…' : 'Log out'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,4 +1,6 @@
 import AppleSelect from './AppleSelect'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Message {
   id: string
@@ -104,8 +106,42 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           </svg>
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm text-white bg-gray-800 rounded-lg p-3">
-                            {message.content}
+                          <div className="text-sm text-white bg-gray-800 rounded-lg p-3 break-words">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({ inline, className, children, ...props }: any) {
+                                  if (!inline) {
+                                    return (
+                                      <pre className="bg-black text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
+                                        <code className={className} {...props}>{children}</code>
+                                      </pre>
+                                    )
+                                  }
+                                  return (
+                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+                                  )
+                                },
+                                table({ children }: any) {
+                                  return (
+                                    <div className="w-full overflow-x-auto my-3">
+                                      <table className="min-w-full border border-gray-700 text-sm">{children}</table>
+                                    </div>
+                                  )
+                                },
+                                thead({ children }: any) {
+                                  return <thead className="bg-gray-800">{children}</thead>
+                                },
+                                th({ children }: any) {
+                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
+                                },
+                                td({ children }: any) {
+                                  return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
+                                }
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
                           </div>
                         </div>
                         <button className="text-gray-400 hover:text-white transition-colors">
@@ -126,8 +162,42 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           </div>
                         )}
                         <div className="flex-1">
-                          <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                            {message.content}
+                          <div className="text-sm text-gray-300 leading-relaxed break-words">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({ inline, className, children, ...props }: any) {
+                                  if (!inline) {
+                                    return (
+                                      <pre className="bg-[#151515] text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
+                                        <code className={className} {...props}>{children}</code>
+                                      </pre>
+                                    )
+                                  }
+                                  return (
+                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+                                  )
+                                },
+                                table({ children }: any) {
+                                  return (
+                                    <div className="w-full overflow-x-auto my-3">
+                                      <table className="min-w-full border border-gray-700 text-sm">{children}</table>
+                                    </div>
+                                  )
+                                },
+                                thead({ children }: any) {
+                                  return <thead className="bg-gray-800">{children}</thead>
+                                },
+                                th({ children }: any) {
+                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
+                                },
+                                td({ children }: any) {
+                                  return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
+                                }
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
                           </div>
                           <div className="flex items-center gap-2 mt-3">
                             <button className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs">
