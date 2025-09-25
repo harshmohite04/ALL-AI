@@ -1,8 +1,12 @@
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel, Field
 from agent import workflow
-from langchain_core.messages import HumanMessage
-from typing import Dict,Optional
+from langchain_core.messages import HumanMessage, SystemMessage
+from typing import Dict, Optional, List
+import os
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 
 from datetime import datetime
 from uuid import uuid4
@@ -194,6 +198,52 @@ def get_sessions(account_id: str):
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
+
+class TitleGenerationRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    model: str = "gpt-3.5-turbo"
+
+@app.post("/generate-title")
+async def generate_title(request: TitleGenerationRequest = Body(...)):
+    try:
+        # Initialize the appropriate LLM based on the model
+        if request.model.startswith("gpt"):
+            llm = ChatOpenAI(model=request.model, temperature=0.3)
+        elif request.model.startswith("gemini"):
+            llm = ChatGoogleGenerativeAI(model=request.model, temperature=0.3)
+        elif "groq" in request.model.lower():
+            llm = ChatGroq(model=request.model, temperature=0.3)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported model for title generation")
+
+        # Create a system message for title generation
+        system_message = SystemMessage(content="""
+        You are a helpful assistant that generates concise, descriptive titles for chat conversations.
+        Create a short, clear title (max 5-7 words) that summarizes the main topic of the conversation.
+        The title should be title-cased and should not include any special characters or emojis.
+        Focus on the main subject or question being discussed.
+        """)
+
+        # Extract message content for context
+        conversation_context = "\n".join([f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}" 
+                                    for m in request.messages[-3:]])  # Use last 3 messages for context
+
+        # Generate the title
+        response = await llm.ainvoke([
+            system_message,
+            HumanMessage(content=f"Generate a title for this conversation:\n\n{conversation_context}")
+        ])
+
+        # Clean up the response
+        title = response.content.strip().strip('"\'')
+        if len(title) > 60:  # Ensure title isn't too long
+            title = title[:57] + "..."
+            
+        return {"title": title}
+
+    except Exception as e:
+        print(f"Error generating title: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
 
 @app.put("/session/update/{account_id}/{session_id}")
 def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):

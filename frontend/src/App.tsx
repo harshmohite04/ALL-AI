@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import MultiModelChat from './components/MultiModelChat'
 import MessageInput from './components/MessageInput'
 import { useAuth } from './auth/AuthContext'
+import { generateTitleFromMessage, generateTitleFromMessages, setChatUrlFunction } from './utils/titleGenerator'
 
 // Base URL for FastAPI chat/session service.
 // In dev, leave empty so Vite proxy handles relative paths like '/chat', '/session', '/history'.
 // In production, set VITE_CHAT_BASE_URL to your backend URL (e.g., https://your-host or http://35.238.224.160:8000).
 const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || ''
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
+
+// Initialize the chat URL function for the title generator
+setChatUrlFunction(chatUrl);
 
 interface Message {
   id: string
@@ -324,6 +328,31 @@ function App() {
   const currentModelMessages: ModelMessages = sessionModelMessages[activeSessionId] || {}
   const currentLoading: { [key: string]: boolean } = sessionLoading[activeSessionId] || {}
 
+  const updateConversationTitle = useCallback(async (conversationId: string, newTitle: string) => {
+    try {
+      // Update the conversation title in the backend
+      await fetch(chatUrl(`/session/update/${encodeURIComponent(accountId)}/${conversationId}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ session_name: newTitle }),
+      });
+
+      // Update the conversation title in the UI
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...conv, title: newTitle } 
+            : conv
+        )
+      );
+    } catch (error) {
+      console.error('Failed to update conversation title:', error);
+    }
+  }, [accountId, token]);
+
   const handleNewChat = async () => {
     if (!token || !accountId) {
       openAuth('signin')
@@ -352,6 +381,40 @@ function App() {
       return
     }
     const timestamp = new Date()
+
+    // If this is the first message in a new conversation, generate a title
+    const isNewConversation = !sessionModelMessages[activeSessionId] || 
+      Object.values(sessionModelMessages[activeSessionId] || {}).every(msgs => msgs.length === 0);
+    
+    if (isNewConversation && token) {
+      try {
+        // Get all messages for the current conversation
+        const allMessages = Object.values(sessionModelMessages[activeSessionId] || {})
+          .flat()
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+        
+        // Add the current message
+        allMessages.push({
+          role: 'user',
+          content
+        });
+        
+        // Generate title using LLM
+        const title = await generateTitleFromMessages(allMessages, token);
+        if (title && title !== 'New Chat') {
+          await updateConversationTitle(activeSessionId, title);
+        }
+      } catch (error) {
+        console.error('Error generating title with LLM, using fallback:', error);
+        const fallbackTitle = await generateTitleFromMessage(content);
+        if (fallbackTitle && fallbackTitle !== 'New Chat') {
+          await updateConversationTitle(activeSessionId, fallbackTitle);
+        }
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
