@@ -17,10 +17,10 @@ interface Model {
 
 interface SidebarProps {
   models: Model[]
-  enabledModels: {[key: string]: boolean}
-  onToggleModel: (models: {[key: string]: boolean}) => void
-  selectedVersions: {[key: string]: string}
-  onVersionChange: (versions: {[key: string]: string}) => void
+  enabledModels: { [key: string]: boolean }
+  onToggleModel: (models: { [key: string]: boolean }) => void
+  selectedVersions: { [key: string]: string }
+  onVersionChange: (versions: { [key: string]: string }) => void
   enabledCount: number
   conversations: Conversation[]
   activeConversationId: string
@@ -28,17 +28,23 @@ interface SidebarProps {
   onNewChat: () => void
   onRenameConversation: (id: string, newTitle: string) => Promise<void>
   onDeleteConversation: (id: string) => Promise<void>
+  // role and generation controls
+  activeRole: string
+  onRoleChange: (role: string) => void
+  selectedImageProviders: Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>
+  onToggleImageProvider: (p: 'Midjourney' | 'DALL·E 3' | 'Stable Diffusion', enabled: boolean) => void
+  selectedVideoProviders: Array<'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>
+  onToggleVideoProvider: (p: 'Runway Gen-2' | 'Nano Banana' | 'Google Veo', enabled: boolean) => void
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation }: SidebarProps) {
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders, onToggleImageProvider, selectedVideoProviders, onToggleVideoProvider }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
 
   // Roles list (simple example)
-  const [roles] = useState<string[]>(['General', 'Finance', 'Coder','Image Generation','Marketing','Video Generation'])
-  const [activeRole, setActiveRole] = useState<string>('Finance')
+  const [roles] = useState<string[]>(['General', 'Finance', 'Coder', 'Image Generation', 'Marketing', 'Video Generation'])
 
   const handleToggleModel = (modelId: string) => {
     onToggleModel({
@@ -48,6 +54,21 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   }
 
   // Version selection happens in the on-screen model header now
+
+  // Lightweight toast/notice for UX instead of window.alert
+  const [notice, setNotice] = useState<{ text: string; kind?: 'info' | 'warning' } | null>(null)
+  const showNotice = (text: string, kind: 'info' | 'warning' = 'warning') => {
+    setNotice({ text, kind })
+    window.clearTimeout((showNotice as any)._t)
+    ;(showNotice as any)._t = window.setTimeout(() => setNotice(null), 3500)
+  }
+
+  // Resolve logo URLs similar to MultiModelChat
+  const logoModules = import.meta.glob('../assets/logos/*.{svg,png,jpg,jpeg,webp}', { eager: true, as: 'url' }) as Record<string, string>
+  const getLogoUrl = (modelId: string): string | null => {
+    const entry = Object.entries(logoModules).find(([path]) => path.includes(`/logos/${modelId}.`))
+    return entry ? entry[1] : null
+  }
 
   // Manage which conversation menu is open
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -262,9 +283,35 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
         )}
         {activeTab === 'model' && (
           <div className="space-y-2">
+            {notice && (
+              <div
+                role="status"
+                className={`flex items-start gap-2 p-2 rounded-lg border text-xs ${notice.kind === 'warning' ? 'bg-yellow-900/30 border-yellow-700/50 text-yellow-200' : 'bg-blue-900/30 border-blue-700/50 text-blue-200'}`}
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-black/20">⚠️</span>
+                <div className="flex-1 leading-5">{notice.text}</div>
+                <button
+                  onClick={() => setNotice(null)}
+                  className="ml-2 text-[10px] text-gray-300 hover:text-white"
+                  aria-label="Dismiss"
+                >✕</button>
+              </div>
+            )}
+            {/* Section: Text Generation */}
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-400">Text Generation</div>
+            {/* Text model toggles */}
             {models.filter(m => !enabledModels[m.id]).map((model) => (
               <div key={model.id} className="flex items-center justify-between px-2 py-2 border-b border-gray-700/40">
-                <div className="text-sm text-gray-200">{model.name}</div>
+                <div className="flex items-center gap-2 min-w-0">
+                  {getLogoUrl(model.id) ? (
+                    <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-4 h-4 object-contain" />
+                  ) : (
+                    <div className="w-4 h-4 bg-gray-600 rounded flex items-center justify-center text-[10px]">
+                      <span>{model.icon}</span>
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-200 truncate">{model.name}</div>
+                </div>
                 <div className="flex items-center gap-2">
                   {/* Only a toggle in sidebar. Enabling here will move the model to the screen and disappear from sidebar list. */}
                   <button
@@ -280,6 +327,64 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             {models.filter(m => !enabledModels[m.id]).length === 0 && (
               <div className="text-xs text-gray-400 px-2 py-3">All models are active on screen.</div>
             )}
+
+            {/* Section: Image Generation */}
+            <div className="px-2 pt-4 pb-1 text-[10px] uppercase tracking-wider text-gray-400">Image Generation</div>
+            {/* Image generation controls (role-gated) */}
+            <div className="mt-1 px-2 py-3 border-t border-gray-700/40">
+              <div className="text-sm text-gray-200">Image Generation</div>
+              <div className="mt-2 text-[11px] text-gray-400">Providers</div>
+              <div className="mt-1 space-y-1">
+                {(['Midjourney','DALL·E 3','Stable Diffusion'] as const).map(p => (
+                  <div key={p} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/40">
+                    <div className="text-xs text-gray-200">{p}</div>
+                    <button
+                      onClick={() => {
+                        if (activeRole !== 'Image Generation') {
+                          showNotice('Switch Role to "Image Generation" to select an image provider.')
+                          return
+                        }
+                        const enabled = selectedImageProviders.includes(p)
+                        onToggleImageProvider(p, !enabled)
+                      }}
+                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${selectedImageProviders.includes(p) ? 'bg-blue-600' : 'bg-gray-600'}`}
+                      aria-label={`Toggle ${p}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${selectedImageProviders.includes(p) ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section: Video Generation */}
+            <div className="px-2 pt-4 pb-1 text-[10px] uppercase tracking-wider text-gray-400">Video Generation</div>
+            {/* Video generation controls (role-gated) */}
+            <div className="mt-1 px-2 py-3 border-t border-gray-700/40">
+              <div className="text-sm text-gray-200">Video Generation</div>
+              <div className="mt-2 text-[11px] text-gray-400">Providers</div>
+              <div className="mt-1 space-y-1">
+                {(['Runway Gen-2','Nano Banana','Google Veo'] as const).map(p => (
+                  <div key={p} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/40">
+                    <div className="text-xs text-gray-200">{p}</div>
+                    <button
+                      onClick={() => {
+                        if (activeRole !== 'Video Generation') {
+                          showNotice('Switch Role to "Video Generation" to select a video provider.')
+                          return
+                        }
+                        const enabled = selectedVideoProviders.includes(p)
+                        onToggleVideoProvider(p, !enabled)
+                      }}
+                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${selectedVideoProviders.includes(p) ? 'bg-blue-600' : 'bg-gray-600'}`}
+                      aria-label={`Toggle ${p}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${selectedVideoProviders.includes(p) ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -288,7 +393,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             {roles.map(role => (
               <button
                 key={role}
-                onClick={() => setActiveRole(role)}
+                onClick={() => onRoleChange(role)}
                 className={`w-full text-left p-2 rounded-lg transition-all duration-200 text-sm ${activeRole === role ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'}`}
               >
                 <div className="truncate">{role}</div>

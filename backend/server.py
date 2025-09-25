@@ -104,6 +104,30 @@ def get_history(session_id: str):
     return {"history": output}
 
 
+# Image and Video generation stubs
+class MediaGenInput(BaseModel):
+    prompt: str = Field(description="Prompt for generation")
+    provider: str = Field(description="Provider name, e.g., Midjourney, DALL·E 3, Stable Diffusion, Runway Gen-2, Nano Banana, Google Veo")
+    session_id: str = Field(description="Session ID for tracking")
+    client_time: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+
+@app.post("/image")
+def generate_image(input: MediaGenInput):
+    # Stub implementation: in real integration, call the respective provider API here.
+    # Return a placeholder image URL.
+    placeholder_url = "https://via.placeholder.com/1024x576.png?text=Generated+Image"
+    return {"url": placeholder_url, "provider": input.provider}
+
+
+@app.post("/video")
+def generate_video(input: MediaGenInput):
+    # Stub implementation: in real integration, call the respective provider API here.
+    # Return a placeholder video URL.
+    placeholder_url = "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4"
+    return {"url": placeholder_url, "provider": input.provider}
+
+
 
 
 
