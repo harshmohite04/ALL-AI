@@ -35,9 +35,10 @@ interface SidebarProps {
   onToggleImageProvider: (p: 'Midjourney' | 'DALL·E 3' | 'Stable Diffusion', enabled: boolean) => void
   selectedVideoProviders: Array<'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>
   onToggleVideoProvider: (p: 'Runway Gen-2' | 'Nano Banana' | 'Google Veo', enabled: boolean) => void
+  plan: 'basic' | 'premium'
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders, onToggleImageProvider, selectedVideoProviders, onToggleVideoProvider }: SidebarProps) {
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders, onToggleImageProvider, selectedVideoProviders, onToggleVideoProvider, plan }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
@@ -46,7 +47,19 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   // Roles list (simple example)
   const [roles] = useState<string[]>(['General', 'Finance', 'Coder', 'Image Generation', 'Marketing', 'Video Generation'])
 
+  // Basic plan locks (deepseek is allowed for basic)
+  const BASIC_LOCKED = new Set(['claude', 'perplexity', 'cohere', 'grok'])
+
+  // Upgrade modal state
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
+
   const handleToggleModel = (modelId: string) => {
+    if (plan === 'basic' && BASIC_LOCKED.has(modelId)) {
+      // Show upgrade modal instead of inline notice
+      setShowUpgrade(true)
+      return
+    }
     onToggleModel({
       ...enabledModels,
       [modelId]: !enabledModels[modelId]
@@ -310,7 +323,9 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
                       <span>{model.icon}</span>
                     </div>
                   )}
-                  <div className="text-sm text-gray-200 truncate">{model.name}</div>
+                  <div className="text-sm text-gray-200 truncate flex items-center gap-1">
+                    <span>{model.name}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Only a toggle in sidebar. Enabling here will move the model to the screen and disappear from sidebar list. */}
@@ -519,6 +534,90 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
+          {/* Backdrop with blur and subtle grid */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowUpgrade(false)} />
+
+          {/* Floating decorative orbs */}
+          <div className="pointer-events-none absolute -top-10 -left-10 h-48 w-48 rounded-full bg-emerald-500/10 blur-2xl animate-pulse" />
+          <div className="pointer-events-none absolute -bottom-8 -right-8 h-56 w-56 rounded-full bg-cyan-400/10 blur-2xl animate-pulse" />
+
+          {/* Container with animated border glow */}
+          <div className="relative mx-4 w-full max-w-xl">
+            <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-tr from-emerald-400/50 via-cyan-400/50 to-transparent opacity-60 blur-md" />
+            <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-gray-900/95 to-gray-950/95 shadow-[0_0_90px_-25px_rgba(16,185,129,0.7)] animate-in fade-in-0 zoom-in-95">
+              {/* Header */}
+              <div className="p-5 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <h3 id="upgrade-title" className="text-sm font-semibold text-white">Upgrade to Premium</h3>
+                </div>
+                <button onClick={() => setShowUpgrade(false)} className="text-gray-400 hover:text-white" aria-label="Close upgrade dialog">✕</button>
+              </div>
+
+              {/* Hero bar shimmer */}
+              <div className="mx-5 mt-4 h-2 rounded-full bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent blur-[2px]" />
+
+              {/* Billing Toggle */}
+              <div className="px-5 pt-4">
+                <div className="flex items-center gap-2 bg-gray-800/60 rounded-xl p-1 w-fit border border-white/10">
+                  <button
+                    onClick={() => setBilling('monthly')}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${billing==='monthly' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white'}`}
+                  >Monthly</button>
+                  <button
+                    onClick={() => setBilling('yearly')}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${billing==='yearly' ? 'bg-gray-700 text-white' : 'text-gray-300 hover:text-white'}`}
+                  >Yearly <span className="ml-1 text-emerald-300/90">Save 17%</span></button>
+                </div>
+              </div>
+
+              {/* Pricing */}
+              <div className="px-5 pt-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold text-white tracking-tight">${billing==='monthly' ? '12' : '120'}</span>
+                    <span className="text-xs text-gray-300">/{billing==='monthly' ? 'Month' : 'Year'}</span>
+                  </div>
+                </div>
+                <div className="mt-3 text-[10px] tracking-wide text-gray-300 uppercase flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center h-5 px-2 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Ultimate Promptbook & Community Access</span>
+                </div>
+              </div>
+
+              {/* Features */}
+              <div className="px-5 pt-4 pb-2">
+                <ul className="space-y-2 text-sm text-gray-200">
+                  <li className="flex items-center gap-2"><span className="text-emerald-400">✔</span> All premium AI models access</li>
+                  <li className="flex items-center gap-2"><span className="text-emerald-400">✔</span> Side-by-side comparison</li>
+                  <li className="flex items-center gap-2"><span className="text-emerald-400">✔</span> 2-minute listen/speak (Premium models count as 2)</li>
+                  <li className="flex items-center gap-2"><span className="text-emerald-400">✔</span> Instant prompt enhancement</li>
+                  <li className="flex items-center gap-2"><span className="text-emerald-400">✔</span> Image generation & Audio transcription</li>
+                </ul>
+              </div>
+
+              {/* CTA */}
+              <div className="px-5 pb-6 pt-2">
+                <button
+                  onClick={() => {
+                    setShowUpgrade(false)
+                    openAuth?.('signup')
+                  }}
+                  className="w-full relative text-sm font-medium text-white rounded-xl py-3 shadow-lg overflow-hidden group"
+                >
+                  <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 group-hover:from-emerald-400 group-hover:via-cyan-300 group-hover:to-emerald-300 transition-colors" />
+                  <span className="absolute -inset-[1px] rounded-xl opacity-50 blur-md bg-emerald-400/40 group-hover:bg-emerald-300/40 transition-colors" />
+                  <span className="relative">Get Started Now →</span>
+                </button>
+                <div className="mt-2 text-[10px] text-gray-400 text-center">Secure payments • Cancel anytime</div>
+              </div>
             </div>
           </div>
         </div>

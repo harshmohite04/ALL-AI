@@ -65,7 +65,7 @@ const MODELS = [
     name: 'Groq', 
     color: 'indigo', 
     icon: '🔍',
-    versions: ['openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b'],
+    versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b'],
     providerKey: 'Groq'
   }
   ,
@@ -129,6 +129,23 @@ const MODELS = [
 function App() {
   const { token, user, openAuth } = useAuth()
   const accountId = (user?.email || user?.id || '').trim()
+  const plan: 'basic' | 'premium' = ((user as any)?.userclass === 'premium') ? 'premium' : 'basic'
+
+  // Locked models for basic plan (cannot be enabled). Do not lock llama (meta), mistral, or deepseek.
+  const BASIC_LOCKED = new Set(['claude', 'perplexity', 'cohere', 'grok'])
+
+  // Compute user-facing model catalog based on plan
+  const DISPLAY_MODELS = MODELS.map(m => {
+    if (plan === 'basic' && m.id === 'chatgpt') {
+      return {
+        ...m,
+        name: 'ChatGPT (Groq OSS)',
+        versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
+      }
+    }
+    return m
+  })
+
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
     chatgpt: false,
     gemini: true,
@@ -144,7 +161,8 @@ function App() {
   })
 
   const [selectedVersions, setSelectedVersions] = useState<{[key: string]: string}>({
-    chatgpt: 'gpt-4o',
+    // Default ChatGPT version will be overridden for basic users below
+    chatgpt: plan === 'basic' ? 'openai/gpt-oss-20b' : 'gpt-4o',
     gemini: 'gemini-2.0-flash',
     deepseek: 'deepseek-chat',
     groq: 'openai/gpt-oss-20b',
@@ -524,9 +542,24 @@ function App() {
     const selected_models: {[key: string]: string} = {}
     Object.keys(enabledModels).forEach(modelId => {
       if (!enabledModels[modelId]) return
-      const providerKey = providerMap[modelId]
+      // Enforce basic plan locks
+      if (plan === 'basic' && BASIC_LOCKED.has(modelId)) return
+
+      // Determine provider key; remap ChatGPT to Groq for basic plan
+      let providerKey = providerMap[modelId]
+      if (plan === 'basic' && modelId === 'chatgpt') {
+        providerKey = 'Groq'
+      }
       if (!providerKey) return // skip models not supported by backend
-      const version = selectedVersions[modelId]
+
+      // Determine version; for basic ChatGPT, force Groq OSS variants
+      let version = selectedVersions[modelId]
+      if (plan === 'basic' && modelId === 'chatgpt') {
+        // Guardrail: if somehow not an OSS variant, coerce to OSS 20B
+        if (!/^openai\/gpt-oss-(?:120b|20b)$/i.test(version || '')) {
+          version = 'openai/gpt-oss-20b'
+        }
+      }
       if (version) selected_models[providerKey] = version
     })
 
@@ -639,7 +672,7 @@ function App() {
     }
   }
 
-  const enabledModelsList = MODELS.filter(model => enabledModels[model.id])
+  const enabledModelsList = DISPLAY_MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
   const isAnyLoading = Object.values(currentLoading).some(Boolean)
 
@@ -723,7 +756,7 @@ function App() {
     <div className="flex h-screen bg-gray-900">
       <div className="fixed left-0 top-0 h-full z-10">
         <Sidebar 
-          models={MODELS}
+          models={DISPLAY_MODELS}
           enabledModels={enabledModels}
           onToggleModel={setEnabledModels}
           selectedVersions={selectedVersions}
@@ -741,6 +774,7 @@ function App() {
           onToggleImageProvider={(p, enabled) => setSelectedImageProviders(prev => enabled ? Array.from(new Set([...prev, p])) : prev.filter(x => x !== p))}
           selectedVideoProviders={selectedVideoProviders}
           onToggleVideoProvider={(p, enabled) => setSelectedVideoProviders(prev => enabled ? Array.from(new Set([...prev, p])) : prev.filter(x => x !== p))}
+          plan={plan}
         />
       </div>
       <div className="flex-1 ml-64 relative h-screen overflow-hidden">
