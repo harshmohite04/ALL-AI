@@ -1,10 +1,12 @@
-import requests
+from langchain_cohere import ChatCohere
+from langchain_core.messages import HumanMessage
 
-payload = {
-    "user_query": "Hello, what is my name?",
-    "models": ["OpenAI", "Groq"]
-}
+from dotenv import load_dotenv
 
-res = requests.post("http://127.0.0.1:8000/chat", json=payload)
-print(res.json())
+load_dotenv()
+
+chat=ChatCohere()
+
+messages = [HumanMessage(content="Hii how are you?")]
+response =chat.invoke(messages)
 

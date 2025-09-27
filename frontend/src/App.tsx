@@ -11,6 +11,13 @@ import { generateTitleFromMessage, generateTitleFromMessages, setChatUrlFunction
 const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || ''
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
 
+// Example defaults
+const imageGenEnabled = true;   // or false
+const videoGenEnabled = true;   // or false
+const imageProvider = "stable-diffusion"; // pick your provider name
+const videoProvider = "runway";           // pick your provider name
+
+
 // Initialize the chat URL function for the title generator
 setChatUrlFunction(chatUrl);
 
