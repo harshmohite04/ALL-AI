@@ -10,6 +10,7 @@ interface Message {
   role: 'user' | 'assistant'
   timestamp: Date
   model?: string
+  animate?: boolean;
 }
 
 interface Model {
@@ -229,7 +230,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
             {/* Chat Area */}
             <div
-              ref={(el) => (listRefs.current[model.id] = el)}
+              ref={(el) => { listRefs.current[model.id] = el; }}
               className="flex-1 overflow-y-auto p-4 pb-28 bg-gray-900 min-h-0 overscroll-contain"
             >
               <div className="space-y-4">
