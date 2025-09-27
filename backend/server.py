@@ -25,8 +25,8 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     # Deployed frontend (IP)
-    "http://35.238.224.160",
-    "https://35.238.224.160",
+    "http://35.238.224.160:5173",
+    "https://35.238.224.160:5173",
 ]
 
 app.add_middleware(
