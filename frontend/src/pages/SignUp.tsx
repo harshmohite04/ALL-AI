@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
@@ -19,37 +19,10 @@ import HuggingfaceLogo from '../assets/logos/huggingface.png'
 import PikalabsLogo from '../assets/logos/pikalabs.jpg'
 import CohereLogo from '../assets/logos/cohere.png'
 
-export default function SignUp() {
-  const { signUp, isLoading } = useAuth()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
-  const [showPassword, setShowPassword] = useState(false)
-
-  // Logos reused from Landing for consistent visual language
-  const logos: string[] = [
-    ChatGPTLogo as unknown as string,
-    ClaudeLogo as unknown as string,
-    GroqLogo as unknown as string,
-    MistralLogo as unknown as string,
-    GeminiLogo as unknown as string,
-    MidjourneyLogo as unknown as string,
-    DeepseekLogo as unknown as string,
-    PerplexityLogo as unknown as string,
-    MetaLogo as unknown as string,
-    RunwayLogo as unknown as string,
-    x1Logo as unknown as string,
-    DeepmindLogo as unknown as string,
-    HuggingfaceLogo as unknown as string,
-    PikalabsLogo as unknown as string,
-    CohereLogo as unknown as string,
-  ]
-
-  // Subtle, seamless horizontal logo ticker
-  const LogoTicker = () => (
-    <div className="mt-2 mb-3">
+// Memoized, module-scoped LogoTicker to avoid remounting on parent re-renders
+const LogoTicker = memo(function LogoTicker({ logos }: { logos: string[] }) {
+  return (
+    <div className="mt-3 mb-6">
       <div className="relative overflow-hidden rounded-lg border border-white/10 bg-white/5">
         <div className="ticker-mask">
           <div className="ticker-row">
@@ -76,12 +49,41 @@ export default function SignUp() {
       </div>
       <style>{`
         .ticker-mask{ mask-image:linear-gradient(90deg,transparent,black 10%,black 90%,transparent); -webkit-mask-image:linear-gradient(90deg,transparent,black 10%,black 90%,transparent); }
-        .ticker-row{ position:relative; display:flex; gap:20px; padding:10px; width:max-content; animation:scroll-x 24s linear infinite; }
+        .ticker-row{ position:relative; display:flex; gap:clamp(12px, 2vw, 24px); padding:8px 12px; width:max-content; animation:scroll-x 24s linear infinite; }
         .ticker-row-delay{ animation-delay:-12s; }
         @keyframes scroll-x{ from{ transform:translateX(0);} to{ transform:translateX(-50%);} }
       `}</style>
     </div>
   )
+})
+
+export default function SignUp() {
+  const { signUp, isLoading } = useAuth()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const [showPassword, setShowPassword] = useState(false)
+
+  // Logos reused from Landing for consistent visual language
+  const logos: string[] = useMemo(() => [
+    ChatGPTLogo as unknown as string,
+    ClaudeLogo as unknown as string,
+    GroqLogo as unknown as string,
+    MistralLogo as unknown as string,
+    GeminiLogo as unknown as string,
+    MidjourneyLogo as unknown as string,
+    DeepseekLogo as unknown as string,
+    PerplexityLogo as unknown as string,
+    MetaLogo as unknown as string,
+    RunwayLogo as unknown as string,
+    x1Logo as unknown as string,
+    DeepmindLogo as unknown as string,
+    HuggingfaceLogo as unknown as string,
+    PikalabsLogo as unknown as string,
+    CohereLogo as unknown as string,
+  ], [])
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -105,7 +107,7 @@ export default function SignUp() {
             </span>
           </h1>
           <p className="mt-1 text-xs text-gray-300/90">Your multi‑model workspace starts here.</p>
-          <LogoTicker />
+          <LogoTicker logos={logos} />
           <form onSubmit={onSubmit} className="space-y-3">
             <div>
               <label className="block text-xs text-gray-300 mb-1">Name</label>
