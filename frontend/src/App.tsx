@@ -10,7 +10,10 @@ import { generateTitleFromMessage, generateTitleFromMessages, setChatUrlFunction
 // In production, set VITE_CHAT_BASE_URL to your backend URL (e.g., https://your-host or http://35.238.224.160:8000).
 const CHAT_BASE = ((import.meta as any)?.env?.VITE_CHAT_BASE_URL?.replace(/\/$/, '')) || ''
 const chatUrl = (path: string) => `${CHAT_BASE}${path.startsWith('/') ? path : `/${path}`}`
+console.log("chatbase :" +CHAT_BASE)
+console.log("VITE_CHAT_BASE_URL:" + import.meta.env.VITE_CHAT_BASE_URL)
 
+console.log("chat "+{chatUrl})
 // Example defaults
 const imageGenEnabled = true;   // or false
 const videoGenEnabled = true;   // or false
