@@ -109,7 +109,7 @@ workflow = graph.compile(checkpointer=checkpointer)
 #         "google_messages": [HumanMessage(content="what is my name")],
 #         "groq_messages": [HumanMessage(content="what is my name")],
 #         "selected_models": {
-#             'OpenAI': 'gpt-4o',
+#             # 'OpenAI': 'gpt-4o',
 #             'Google': 'gemini-2.0-flash',
 #             'Groq': 'openai/gpt-oss-20b',
 #         },
@@ -117,7 +117,7 @@ workflow = graph.compile(checkpointer=checkpointer)
 #     config=config1,
 # )
 
-
+# print(result)
 # result = workflow.invoke(
 #     {
 #         "openai_messages": [HumanMessage(content="My name is Harsh Mohite")],
