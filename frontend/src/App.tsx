@@ -358,15 +358,16 @@ function App() {
 
   const updateConversationTitle = useCallback(async (conversationId: string, newTitle: string) => {
     try {
-      // Update the conversation title in the backend
-      await fetch(chatUrl(`/session/update/${encodeURIComponent(accountId)}/${conversationId}`), {
+      // Use query param style to match backend expectation (same as handleRenameConversation)
+      const url = chatUrl(`/session/update/${encodeURIComponent(accountId)}/${encodeURIComponent(conversationId)}?session_name=${encodeURIComponent(newTitle)}`)
+      const res = await fetch(url, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ session_name: newTitle }),
-      });
+        headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `Failed to update title: ${res.status}`)
+      }
 
       // Update the conversation title in the UI
       setConversations(prev => 
@@ -375,9 +376,9 @@ function App() {
             ? { ...conv, title: newTitle } 
             : conv
         )
-      );
+      )
     } catch (error) {
-      console.error('Failed to update conversation title:', error);
+      console.error('Failed to update conversation title:', error)
     }
   }, [accountId, token]);
 
