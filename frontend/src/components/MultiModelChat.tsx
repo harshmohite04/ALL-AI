@@ -32,9 +32,10 @@ interface MultiModelChatProps {
   onVersionChange: (modelId: string, version: string) => void
   enabledModels: {[key: string]: boolean}
   onToggleModel: (models: {[key: string]: boolean}) => void
+  plan?: 'basic' | 'premium'
 }
 
-export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel }: MultiModelChatProps) {
+export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel, plan = 'basic' }: MultiModelChatProps) {
   // Default column width in pixels (Tailwind w-96 = 384px)
   const DEFAULT_WIDTH = 384
   const MIN_WIDTH = 260
@@ -212,7 +213,11 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                 {/* Version selector in header (Apple-style) */}
                 <AppleSelect
                   className="w-40"
-                  options={(model as any).versions?.map((v: string) => ({ label: v, value: v })) ?? []}
+                  options={((model as any).versions as string[] | undefined)?.map((v: string) => ({
+                    label: v,
+                    value: v,
+                    disabled: model.id === 'chatgpt' && plan === 'basic' && !['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(v),
+                  })) ?? []}
                   value={selectedVersions[model.id]}
                   onChange={(val) => onVersionChange(model.id, val)}
                   ariaLabel={`Select version for ${model.name}`}

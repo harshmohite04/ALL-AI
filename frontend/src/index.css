@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Ensure global dark background so fixed elements don't reveal white page */
 html, body, #root {
   height: 100%;
   background-color: #0f172a; /* tailwind gray-900 */
@@ -8,6 +7,16 @@ html, body, #root {
 
 body {
   color-scheme: dark;
+}
+
+/* Pointer cursor for all buttons */
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: pointer;
 }
 
 /* Firefox scrollbar (vertical/overall) */

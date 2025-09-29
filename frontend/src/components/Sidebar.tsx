@@ -38,7 +38,7 @@ interface SidebarProps {
   plan: 'basic' | 'premium'
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders, onToggleImageProvider, selectedVideoProviders, onToggleVideoProvider, plan }: SidebarProps) {
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
@@ -328,14 +328,28 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Only a toggle in sidebar. Enabling here will move the model to the screen and disappear from sidebar list. */}
-                  <button
-                    onClick={() => handleToggleModel(model.id)}
-                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${enabledModels[model.id] ? 'bg-blue-600' : 'bg-gray-600'}`}
-                    aria-label={`Toggle ${model.name}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${enabledModels[model.id] ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
+                  {/* If premium-only and user is on basic plan, show lock instead of toggle */}
+                  {plan === 'basic' && BASIC_LOCKED.has(model.id) ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowUpgrade(true)}
+                      className="p-1.5 rounded-md bg-gray-700/60 text-gray-300 hover:bg-gray-600/70 hover:text-white transition"
+                      aria-label={`${model.name} is premium. Upgrade to unlock.`}
+                      title="Premium model — Upgrade to unlock"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11V7a4 4 0 10-8 0v4m2 0h8a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2z" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleToggleModel(model.id)}
+                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${enabledModels[model.id] ? 'bg-blue-600' : 'bg-gray-600'}`}
+                      aria-label={`Toggle ${model.name}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${enabledModels[model.id] ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -343,63 +357,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
               <div className="text-xs text-gray-400 px-2 py-3">All models are active on screen.</div>
             )}
 
-            {/* Section: Image Generation */}
-            <div className="px-2 pt-4 pb-1 text-[10px] uppercase tracking-wider text-gray-400">Image Generation</div>
-            {/* Image generation controls (role-gated) */}
-            <div className="mt-1 px-2 py-3 border-t border-gray-700/40">
-              <div className="text-sm text-gray-200">Image Generation</div>
-              <div className="mt-2 text-[11px] text-gray-400">Providers</div>
-              <div className="mt-1 space-y-1">
-                {(['Midjourney','DALL·E 3','Stable Diffusion'] as const).map(p => (
-                  <div key={p} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/40">
-                    <div className="text-xs text-gray-200">{p}</div>
-                    <button
-                      onClick={() => {
-                        if (activeRole !== 'Image Generation') {
-                          showNotice('Switch Role to "Image Generation" to select an image provider.')
-                          return
-                        }
-                        const enabled = selectedImageProviders.includes(p)
-                        onToggleImageProvider(p, !enabled)
-                      }}
-                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${selectedImageProviders.includes(p) ? 'bg-blue-600' : 'bg-gray-600'}`}
-                      aria-label={`Toggle ${p}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${selectedImageProviders.includes(p) ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Section: Video Generation */}
-            <div className="px-2 pt-4 pb-1 text-[10px] uppercase tracking-wider text-gray-400">Video Generation</div>
-            {/* Video generation controls (role-gated) */}
-            <div className="mt-1 px-2 py-3 border-t border-gray-700/40">
-              <div className="text-sm text-gray-200">Video Generation</div>
-              <div className="mt-2 text-[11px] text-gray-400">Providers</div>
-              <div className="mt-1 space-y-1">
-                {(['Runway Gen-2','Nano Banana','Google Veo'] as const).map(p => (
-                  <div key={p} className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-800/40">
-                    <div className="text-xs text-gray-200">{p}</div>
-                    <button
-                      onClick={() => {
-                        if (activeRole !== 'Video Generation') {
-                          showNotice('Switch Role to "Video Generation" to select a video provider.')
-                          return
-                        }
-                        const enabled = selectedVideoProviders.includes(p)
-                        onToggleVideoProvider(p, !enabled)
-                      }}
-                      className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-200 ${selectedVideoProviders.includes(p) ? 'bg-blue-600' : 'bg-gray-600'}`}
-                      aria-label={`Toggle ${p}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${selectedVideoProviders.includes(p) ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Image/Video Generation sections removed per request */}
           </div>
         )}
 

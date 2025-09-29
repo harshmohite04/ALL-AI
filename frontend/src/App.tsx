@@ -49,7 +49,7 @@ const MODELS = [
     name: 'ChatGPT 5', 
     color: 'green', 
     icon: '🤖',
-    versions: ['gpt-4o', 'gpt-4-turbo', 'gpt-5'],
+    versions: ['gpt-4o', 'gpt-4-turbo', 'gpt-5', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
     // Used to map to backend provider keys
     providerKey: 'OpenAI'
   },
@@ -67,7 +67,8 @@ const MODELS = [
     name: 'DeepSeek', 
     color: 'indigo', 
     icon: '🔍',
-    versions: ['deepseek-chat', 'deepseek-coder']
+    versions: ['deepseek-r1-distill-llama-70b'],
+    providerKey: 'Deepseek'
   }
   ,
   { 
@@ -113,10 +114,11 @@ const MODELS = [
   ,
   { 
     id: 'meta', 
-    name: 'Meta Llama', 
+    name: 'Meta', 
     color: 'pink', 
     icon: '🦙',
-    versions: ['llama-3.1-8b', 'llama-3.1-70b']
+    versions: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'],
+    providerKey: 'Meta'
   }
   ,
   { 
@@ -129,10 +131,11 @@ const MODELS = [
   ,
   { 
     id: 'alibaba', 
-    name: 'Alibaba Qwen', 
+    name: 'Alibaba', 
     color: 'red', 
     icon: '🀄',
-    versions: ['qwen2-7b', 'qwen2-72b']
+    versions: ['qwen/qwen3-32b'],
+    providerKey: 'Alibaba'
   }
 ]
 
@@ -144,20 +147,11 @@ function App() {
   // Locked models for basic plan (cannot be enabled). Do not lock llama (meta), mistral, or deepseek.
   const BASIC_LOCKED = new Set(['claude', 'perplexity', 'cohere', 'grok'])
 
-  // Compute user-facing model catalog based on plan
-  const DISPLAY_MODELS = MODELS.map(m => {
-    if (plan === 'basic' && m.id === 'chatgpt') {
-      return {
-        ...m,
-        name: 'ChatGPT (Groq OSS)',
-        versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
-      }
-    }
-    return m
-  })
+  // Compute user-facing model catalog based on plan (no plan-based overrides for ChatGPT)
+  const DISPLAY_MODELS = MODELS
 
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
-    chatgpt: false,
+    chatgpt: true,
     gemini: true,
     deepseek: false,
     groq: true,
@@ -171,16 +165,16 @@ function App() {
   })
 
   const [selectedVersions, setSelectedVersions] = useState<{[key: string]: string}>({
-    // Default ChatGPT version will be overridden for basic users below
-    chatgpt: plan === 'basic' ? 'openai/gpt-oss-20b' : 'gpt-4o',
+    // Single ChatGPT across plans
+    chatgpt: 'gpt-4o',
     gemini: 'gemini-2.0-flash',
-    deepseek: 'deepseek-chat',
+    deepseek: 'deepseek-r1-distill-llama-70b',
     groq: 'openai/gpt-oss-20b',
     perplexity: 'sonar-small-online',
     cohere: 'command-r',
-    meta: 'llama-3.1-8b',
+    meta: 'llama-3.1-8b-instant',
     mistral: 'mistral-small',
-    alibaba: 'qwen2-7b'
+    alibaba: 'qwen/qwen3-32b'
   })
 
   // Role and media generation selections
@@ -290,6 +284,9 @@ function App() {
       openai_messages: 'OpenAI',
       google_messages: 'Google',
       groq_messages: 'Groq',
+      meta_messages: 'Meta',
+      deepseek_messages: 'Deepseek',
+      alibaba_messages: 'Alibaba',
     }
 
     // Initialize empty per-model messages
@@ -555,21 +552,11 @@ function App() {
       // Enforce basic plan locks
       if (plan === 'basic' && BASIC_LOCKED.has(modelId)) return
 
-      // Determine provider key; remap ChatGPT to Groq for basic plan
-      let providerKey = providerMap[modelId]
-      if (plan === 'basic' && modelId === 'chatgpt') {
-        providerKey = 'Groq'
-      }
+      // Determine provider key (no remap by plan)
+      const providerKey = providerMap[modelId]
       if (!providerKey) return // skip models not supported by backend
 
-      // Determine version; for basic ChatGPT, force Groq OSS variants
-      let version = selectedVersions[modelId]
-      if (plan === 'basic' && modelId === 'chatgpt') {
-        // Guardrail: if somehow not an OSS variant, coerce to OSS 20B
-        if (!/^openai\/gpt-oss-(?:120b|20b)$/i.test(version || '')) {
-          version = 'openai/gpt-oss-20b'
-        }
-      }
+      const version = selectedVersions[modelId]
       if (version) selected_models[providerKey] = version
     })
 
@@ -796,6 +783,7 @@ function App() {
           onVersionChange={(modelId, version) => setSelectedVersions(prev => ({ ...prev, [modelId]: version }))}
           enabledModels={enabledModels}
           onToggleModel={setEnabledModels}
+          plan={plan}
         />
         {/* Bottom overlay to mask page edge when horizontally scrolled (exclude sidebar area) */}
         <div className="fixed left-64 right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent" />

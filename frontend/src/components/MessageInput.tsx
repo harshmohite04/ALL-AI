@@ -10,6 +10,12 @@ interface MessageInputProps {
 export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default' }: MessageInputProps) {
   const [message, setMessage] = useState('')
   const [showPopup, setShowPopup] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [showImageFilter, setShowImageFilter] = useState(false)
+  const [showVideoFilter, setShowVideoFilter] = useState(false)
+  const [selectedGen, setSelectedGen] = useState<null | 'image' | 'video'>(null)
+  const [selectedImageModels, setSelectedImageModels] = useState<Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>>([])
+  const [selectedVideoModels, setSelectedVideoModels] = useState<Array<'Text-to-Video' | 'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Keep focus on the textarea when enabled
@@ -19,19 +25,84 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
     }
   }, [disabled])
 
+  // Collapse back to single-line when message is cleared
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    if (message === '') {
+      setExpanded(false)
+      ta.style.height = 'auto'
+      ta.style.height = '56px'
+    }
+  }, [message])
+
+  // Initialize and persist image model preferences
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('selectedImageModels')
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>
+        if (Array.isArray(parsed) && parsed.length) {
+          setSelectedImageModels(parsed)
+          return
+        }
+      }
+      // Default selection if nothing stored
+      setSelectedImageModels(['DALL·E 3'])
+    } catch {
+      setSelectedImageModels(['DALL·E 3'])
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('selectedImageModels', JSON.stringify(selectedImageModels))
+    } catch {}
+  }, [selectedImageModels])
+
+  // Initialize and persist video model preferences
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('selectedVideoModels')
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<'Text-to-Video' | 'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>
+        if (Array.isArray(parsed) && parsed.length) {
+          setSelectedVideoModels(parsed)
+          return
+        }
+      }
+      // Default selection if nothing stored
+      setSelectedVideoModels(['Runway Gen-2'])
+    } catch {
+      setSelectedVideoModels(['Runway Gen-2'])
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('selectedVideoModels', JSON.stringify(selectedVideoModels))
+    } catch {}
+  }, [selectedVideoModels])
+
   // Close popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (showPopup && !(event.target as Element).closest('.popup-container')) {
         setShowPopup(false)
       }
+      if (showImageFilter && !(event.target as Element).closest('.image-filter-container')) {
+        setShowImageFilter(false)
+      }
+      if (showVideoFilter && !(event.target as Element).closest('.video-filter-container')) {
+        setShowVideoFilter(false)
+      }
     }
 
-    if (showPopup) {
+    if (showPopup || showImageFilter || showVideoFilter) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showPopup])
+  }, [showPopup, showImageFilter, showVideoFilter])
 
   const handleSubmit = () => {
     if (message.trim() && !disabled) {
@@ -56,14 +127,14 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
   }
 
   return (
-    <div className="max-w-2xl mx-auto bg-[#0b101b] rounded-2xl shadow-lg border border-gray-200 p-4">
+    <div className="max-w-4xl mx-auto bg-[#0b101b] rounded-2xl shadow-lg border border-gray-200 p-4">
       <div className="relative">
         <button
           type="button"
           className={`popup-container ${
             variant === 'floating'
-              ? 'absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 hover:text-white transition-all duration-200 flex items-center justify-center'
-              : 'absolute left-3 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center'
+              ? `absolute left-2 ${expanded ? 'bottom-4' : 'top-1/2 -translate-y-1/2'} w-8 h-8 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 hover:text-white transition-all duration-200 flex items-center justify-center`
+              : `absolute left-3 ${expanded ? 'bottom-5' : 'top-1/2 -translate-y-1/2'} w-10 h-10 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center`
           }`}
           onClick={() => setShowPopup(!showPopup)}
           onMouseDown={(e) => {
@@ -147,8 +218,8 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
           autoFocus
           className={
             variant === 'floating'
-              ? 'w-full px-12 py-3 pr-20 rounded-xl resize-none focus:outline-none border border-gray-700 bg-transparent text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed'
-              : 'w-full px-16 py-4 pr-20 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md focus:shadow-lg bg-white'
+              ? `w-full px-12 py-3 ${expanded ? 'pb-12' : ''} pr-20 rounded-xl resize-none focus:outline-none border border-gray-700 bg-transparent text-white placeholder-gray-400 disabled:opacity-50 disabled:cursor-not-allowed`
+              : `w-full px-16 py-4 ${expanded ? 'pb-12' : ''} pr-20 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md focus:shadow-lg bg-white`
           }
           rows={1}
           style={{
@@ -160,14 +231,16 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
             const target = e.target as HTMLTextAreaElement
             target.style.height = 'auto'
             target.style.height = Math.min(target.scrollHeight, 200) + 'px'
+            const min = 56
+            setExpanded(target.scrollHeight > min + 1)
           }}
         />
         <button
           type="button"
           className={
             variant === 'floating'
-              ? 'absolute right-12 top-1/2 -translate-y-1/2 w-8 h-8 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 hover:text-white transition-all duration-200 flex items-center justify-center'
-              : 'absolute right-12 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center'
+              ? `absolute right-12 ${expanded ? 'bottom-4' : 'top-1/2 -translate-y-1/2'} w-8 h-8 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 hover:text-white transition-all duration-200 flex items-center justify-center`
+              : `absolute right-12 ${expanded ? 'bottom-5' : 'top-1/2 -translate-y-1/2'} w-10 h-10 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center`
           }
           onMouseDown={(e) => {
             // Prevent button from taking focus away from the textarea
@@ -198,8 +271,8 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
           }}
           className={
             variant === 'floating'
-              ? 'absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white text-blue-600 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-lg'
-              : 'absolute right-3 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white text-blue-600 rounded-full hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 disabled:hover:scale-100 flex items-center justify-center'
+              ? `absolute right-2 ${expanded ? 'bottom-4' : 'top-1/2 -translate-y-1/2'} w-8 h-8 bg-white text-blue-600 rounded-full hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-lg`
+              : `absolute right-3 ${expanded ? 'bottom-5' : 'top-1/2 -translate-y-1/2'} w-10 h-10 bg-white text-blue-600 rounded-full hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 disabled:hover:scale-100 flex items-center justify-center`
           }
         >
           <svg 
@@ -220,38 +293,165 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
       
       {/* Buttons below the input */}
       <div className="flex items-center justify-start gap-3 mt-4">
-        <button
-          type="button"
-          className={
-            variant === 'floating'
-              ? 'px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 hover:text-white transition-all duration-200 text-sm font-medium'
-              : 'px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md'
-          }
-          onMouseDown={(e) => {
-            e.preventDefault()
-          }}
-        >
-          <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Generate Image
-        </button>
-        <button
-          type="button"
-          className={
-            variant === 'floating'
-              ? 'px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 hover:text-white transition-all duration-200 text-sm font-medium'
-              : 'px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md'
-          }
-          onMouseDown={(e) => {
-            e.preventDefault()
-          }}
-        >
-          <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-          </svg>
-          Generate Video
-        </button>
+        {/* Generate Image with filter */}
+        <div className="relative image-filter-container flex items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedGen(prev => {
+                const next = prev === 'image' ? null : 'image'
+                if (next === null) setShowImageFilter(false)
+                if (next === 'image') setShowVideoFilter(false)
+                return next
+              })
+            }}
+            aria-pressed={selectedGen === 'image'}
+            className={
+              variant === 'floating'
+                ? `${selectedGen === 'image' 
+                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 hover:bg-blue-600 hover:text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'} px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium`
+                : `${selectedGen === 'image' 
+                    ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-300 hover:bg-blue-100 hover:text-blue-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'} px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md`
+            }
+            onMouseDown={(e) => {
+              e.preventDefault()
+            }}
+          >
+            <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Generate Image
+          </button>
+          <button
+            type="button"
+            aria-label="Image filter"
+            onClick={() => setShowImageFilter((v) => !v)}
+            onMouseDown={(e) => e.preventDefault()}
+            className="ml-2 w-8 h-8 rounded-full border border-gray-300/60 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition flex items-center justify-center shadow-sm"
+          >
+            {/* Slider icon matching provided sketch */}
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 8H4" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="16" cy="8" r="2" fill="currentColor" />
+              <path d="M20 16H10" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="8" cy="16" r="2" fill="currentColor" />
+            </svg>
+          </button>
+          {showImageFilter && (
+            <div className="absolute left-0 bottom-full mb-2 z-50 min-w-[240px] rounded-lg border border-gray-200 bg-[#0b101b] shadow-xl">
+              <div className="py-2">
+                <div className="px-3 pb-2 text-xs uppercase tracking-wide text-gray-400">Image Models</div>
+                {(['Midjourney','DALL·E 3','Stable Diffusion'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    className={`w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-800 flex items-center justify-between ${selectedImageModels.includes(opt) ? 'bg-gray-800/60' : ''}`}
+                    onClick={() => {
+                      setSelectedImageModels(prev => {
+                        const exists = prev.includes(opt)
+                        if (exists) {
+                          const next = prev.filter(x => x !== opt)
+                          // Prevent deselecting the last remaining option
+                          return next.length ? next : prev
+                        } else {
+                          return [...prev, opt]
+                        }
+                      })
+                    }}
+                  >
+                    <span>{opt}</span>
+                    {selectedImageModels.includes(opt) && (
+                      <svg className="w-4 h-4 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L8.5 11.586l6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Generate Video with filter */}
+        <div className="relative video-filter-container flex items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedGen(prev => {
+                const next = prev === 'video' ? null : 'video'
+                if (next === null) setShowVideoFilter(false)
+                if (next === 'video') setShowImageFilter(false)
+                return next
+              })
+            }}
+            aria-pressed={selectedGen === 'video'}
+            className={
+              variant === 'floating'
+                ? `${selectedGen === 'video' 
+                    ? 'bg-blue-600 text-white ring-2 ring-blue-400 hover:bg-blue-600 hover:text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'} px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium`
+                : `${selectedGen === 'video' 
+                    ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-300 hover:bg-blue-100 hover:text-blue-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'} px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md`
+            }
+            onMouseDown={(e) => {
+              e.preventDefault()
+            }}
+          >
+            <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+            Generate Video
+          </button>
+          <button
+            type="button"
+            aria-label="Video filter"
+            onClick={() => setShowVideoFilter((v) => !v)}
+            onMouseDown={(e) => e.preventDefault()}
+            className="ml-2 w-8 h-8 rounded-full border border-gray-300/60 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition flex items-center justify-center shadow-sm"
+          >
+            {/* Slider icon matching provided sketch */}
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M14 8H4" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="16" cy="8" r="2" fill="currentColor" />
+              <path d="M20 16H10" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="8" cy="16" r="2" fill="currentColor" />
+            </svg>
+          </button>
+          {showVideoFilter && (
+            <div className="absolute left-0 bottom-full mb-2 z-50 min-w-[280px] rounded-lg border border-gray-200 bg-[#0b101b] shadow-xl">
+              <div className="py-2">
+                <div className="px-3 pb-2 text-xs uppercase tracking-wide text-gray-400">Video Models</div>
+                {(['Text-to-Video','Runway Gen-2','Nano Banana','Google Veo'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    className={`w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-800 flex items-center justify-between ${selectedVideoModels.includes(opt) ? 'bg-gray-800/60' : ''}`}
+                    onClick={() => {
+                      setSelectedVideoModels(prev => {
+                        const exists = prev.includes(opt)
+                        if (exists) {
+                          const next = prev.filter(x => x !== opt)
+                          // Prevent deselecting the last remaining option
+                          return next.length ? next : prev
+                        } else {
+                          return [...prev, opt]
+                        }
+                      })
+                    }}
+                  >
+                    <span>{opt}</span>
+                    {selectedVideoModels.includes(opt) && (
+                      <svg className="w-4 h-4 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-7.25 7.25a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L8.5 11.586l6.543-6.543a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {variant !== 'floating' && (
