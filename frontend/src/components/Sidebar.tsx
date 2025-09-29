@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
+import { useSettings } from '../settings/SettingsContext'
 
 interface Conversation {
   id: string
@@ -40,6 +41,7 @@ interface SidebarProps {
 
 export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
+  const { openSettings } = useSettings()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
@@ -432,7 +434,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
                   animation: 'fadeIn .15s ease-out',
                 }}
               >
-                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 rounded-md hover:bg-gray-700/60 transition-colors" role="menuitem">
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-200 rounded-md hover:bg-gray-700/60 transition-colors" role="menuitem" onClick={() => { setIsUserMenuOpen(false); openSettings('general') }}>
                   <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-gray-700/60 text-[10px]">⚙️</span>
                   Settings
                 </button>

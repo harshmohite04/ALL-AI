@@ -20,8 +20,8 @@ type AuthContextType = {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-const STORAGE_KEY = 'allai_auth_v1'
+const TOKEN_COOKIE = 'allai_token'
+const USER_COOKIE = 'allai_user'
 
 // Base URL for API calls. In development, the Vite proxy can be used with empty base.
 // In production, set VITE_API_BASE_URL to your backend URL, e.g. https://api.example.com
@@ -32,11 +32,46 @@ function apiUrl(path: string) {
   return `${API_BASE}${cleanPath}`
 }
 
-function loadFromStorage(): { token: string | null; user: User | null } {
+// --- Cookie helpers ---
+function setCookie(name: string, value: string, days: number) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { token: null, user: null }
-    return JSON.parse(raw)
+    const expires = (() => {
+      const d = new Date()
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000)
+      return `; expires=${d.toUTCString()}`
+    })()
+    document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/; SameSite=Lax`
+  } catch {}
+}
+
+function getCookie(name: string): string | null {
+  try {
+    const nameEQ = name + '='
+    const ca = document.cookie.split(';')
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i]
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+      if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length))
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function eraseCookie(name: string) {
+  try {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`
+  } catch {}
+}
+
+function loadFromStorage(): { token: string | null; user: User | null } {
+  // Read only from cookies
+  try {
+    const token = getCookie(TOKEN_COOKIE)
+    const userRaw = getCookie(USER_COOKIE)
+    const user = userRaw ? (JSON.parse(userRaw) as User) : null
+    return { token: token || null, user }
   } catch {
     return { token: null, user: null }
   }
@@ -44,7 +79,13 @@ function loadFromStorage(): { token: string | null; user: User | null } {
 
 function saveToStorage(state: { token: string | null; user: User | null }) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    // Align cookie max-age with backend token expiry (7d)
+    const days = 7
+    if (state.token) setCookie(TOKEN_COOKIE, state.token, days)
+    else eraseCookie(TOKEN_COOKIE)
+
+    if (state.user) setCookie(USER_COOKIE, JSON.stringify(state.user), days)
+    else eraseCookie(USER_COOKIE)
   } catch {}
 }
 
@@ -111,6 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     try {
       setAuth({ token: null, user: null })
+      // Ensure cookies are removed immediately
+      eraseCookie(TOKEN_COOKIE)
+      eraseCookie(USER_COOKIE)
     } finally {
       setIsLoading(false)
     }
