@@ -75,7 +75,7 @@ const MODELS = [
     name: 'Groq', 
     color: 'indigo', 
     icon: '🔍',
-    versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b'],
+    versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b','llama-3.3-70b-versatile'],
     providerKey: 'Groq'
   }
   ,
