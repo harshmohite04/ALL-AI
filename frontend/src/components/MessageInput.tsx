@@ -17,6 +17,7 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
   const [selectedImageModels, setSelectedImageModels] = useState<Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>>([])
   const [selectedVideoModels, setSelectedVideoModels] = useState<Array<'Text-to-Video' | 'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
 
   // Keep focus on the textarea when enabled
   useEffect(() => {
@@ -104,6 +105,25 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
     }
   }, [showPopup, showImageFilter, showVideoFilter])
 
+  // Expose input container height via CSS var --input-height (with a small safety margin)
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const update = () => {
+      const h = el.offsetHeight || 0
+      const margin = 16 // extra padding so content never touches
+      document.documentElement.style.setProperty('--input-height', `${h + margin}px`)
+    }
+    update()
+    const ro = new ResizeObserver(() => update())
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   const handleSubmit = () => {
     if (message.trim() && !disabled) {
       onSendMessage(message.trim())
@@ -127,7 +147,7 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
   }
 
   return (
-    <div className="max-w-4xl mx-auto bg-[#0b101b] rounded-2xl shadow-lg border border-gray-200 p-4">
+    <div ref={rootRef} className="max-w-4xl mx-auto bg-[#0b101b] rounded-2xl shadow-lg border border-gray-200 p-4">
       <div className="relative">
         <button
           type="button"

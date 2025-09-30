@@ -14,7 +14,7 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017'
 const DB_NAME = 'LangGraphDB'
 console.log('Using Mongo URI:', MONGO_URI, 'DB:', DB_NAME)
 const PORT = process.env.PORT || 5000
-app.use(express.static(path.join(process.cwd(), 'dist'))) 
+// app.use(express.static(path.join(process.cwd(), 'dist'))) 
 // Connect to Mongo
 mongoose.connect(MONGO_URI, { dbName: DB_NAME }).then(() => {
   console.log('MongoDB connected')

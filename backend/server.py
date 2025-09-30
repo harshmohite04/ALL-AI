@@ -90,23 +90,19 @@ def get_history(session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     history = list(workflow.get_state_history(config=config))
     
-    print("history")
-    
     output = []
     for step in history:
         state = step.values
         step_messages = {}
-        for model_key in ["openai_messages", "google_messages", "groq_messages"]:
-            if model_key in state:
-                step_messages[model_key] = [
-                    {"role": "User" if msg.type == "human" else "AI", "content": msg.content}
-                    for msg in state[model_key]
+        # Dynamically include any keys that end with "_messages"
+        for key, msgs in state.items():
+            if isinstance(key, str) and key.endswith("_messages") and isinstance(msgs, list):
+                step_messages[key] = [
+                    {"role": "User" if getattr(msg, "type", "") == "human" else "AI", "content": getattr(msg, "content", "")}
+                    for msg in msgs
                 ]
         output.append(step_messages)
-        
-   
-    # print(history[0].values["google_messages"])
-    # print(history[0].values["groq_messages"])
+    
     return {"history": output}
 
 

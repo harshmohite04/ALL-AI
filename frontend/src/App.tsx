@@ -11,7 +11,7 @@ import Meta from './assets/logos/meta.jpg'
 import Groq from './assets/logos/groq.png'
 import Grok from './assets/logos/grok.svg'
 import Claude from './assets/logos/claude.png'
-import Perplexity from './assets/logos/Perplexity.jpg'
+import Perplexity from './assets/logos/perplexity.jpg'
 import Cohere from './assets/logos/cohere.png'
 import Deepseek from './assets/logos/deepseek.png'
 import Mistral from './assets/logos/mistral.png'
@@ -194,6 +194,21 @@ function App() {
   const [selectedImageProviders, setSelectedImageProviders] = useState<Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>>([])
   const [selectedVideoProviders, setSelectedVideoProviders] = useState<Array<'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>>([])
 
+  // UI: Sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // Show reopen button only after transition completes to avoid double-click flicker
+  const [showReopenBtn, setShowReopenBtn] = useState(false)
+  useEffect(() => {
+    let t: number | undefined
+    if (sidebarCollapsed) {
+      // match transition duration (300ms)
+      t = window.setTimeout(() => setShowReopenBtn(true), 320)
+    } else {
+      setShowReopenBtn(false)
+    }
+    return () => { if (t) window.clearTimeout(t) }
+  }, [sidebarCollapsed])
+
   // Conversations and active conversation
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string>('')
@@ -301,36 +316,41 @@ function App() {
       alibaba_messages: 'Alibaba',
     }
 
-    // Initialize empty per-model messages
+    // Initialize empty per-model messages and only take the first history step (index 0)
     const perModel: ModelMessages = {}
-
-    // Only load the first history turn (index 0) into the UI
     let idx = 0
-    const firstTurn = history[0] || {}
-    const makeTs = () => new Date(Date.now() - (1 - idx) * 1000)
-    Object.keys(keyToProvider).forEach(k => {
-      const provider = keyToProvider[k]
-      const modelId = providerToModelId[provider]
-      if (!modelId) return
-      const msgs = Array.isArray(firstTurn[k]) ? firstTurn[k] : []
-      msgs.forEach((m: any) => {
-        const role = String(m.role || '').toLowerCase() === 'user' ? 'user' : 'assistant'
-        const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-        const message: Message = {
-          id: `${sessionId}-${modelId}-${idx}-${role}`,
-          content,
-          role: role as 'user' | 'assistant',
-          timestamp: makeTs(),
-          model: modelId,
-          animate: false,
-        }
-        perModel[modelId] = [...(perModel[modelId] || []), message]
-        idx += 1
+    const baseTime = Date.now()
+    const turns = history.length > 0 ? [history[0]] : []
+    turns.forEach((turn: any, turnIndex: number) => {
+      Object.keys(keyToProvider).forEach(k => {
+        const provider = keyToProvider[k]
+        const modelId = providerToModelId[provider]
+        if (!modelId) return
+        const msgs = Array.isArray(turn[k]) ? turn[k] : []
+        msgs.forEach((m: any) => {
+          const role = String(m.role || '').toLowerCase() === 'user' ? 'user' : 'assistant'
+          const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+          const message: Message = {
+            id: `${sessionId}-${modelId}-${turnIndex}-${idx}-${role}`,
+            content,
+            role: role as 'user' | 'assistant',
+            timestamp: new Date(baseTime + idx),
+            model: modelId,
+            animate: false,
+          }
+          perModel[modelId] = [...(perModel[modelId] || []), message]
+          idx += 1
+        })
       })
     })
 
     setSessionModelMessages(prev => ({ ...prev, [sessionId]: perModel }))
     setSessionLoading(prev => ({ ...prev, [sessionId]: {} }))
+
+    // Auto-set enabled models to exactly those that appear in this session's history
+    if (Object.keys(perModel).length > 0) {
+      setEnabledModels(buildEnabledFromMessages(perModel))
+    }
   }
 
   // On mount, load sessions and pick the most recent; if none, create one
@@ -364,6 +384,16 @@ function App() {
   const activeSessionId = activeConversationId
   const currentModelMessages: ModelMessages = sessionModelMessages[activeSessionId] || {}
   const currentLoading: { [key: string]: boolean } = sessionLoading[activeSessionId] || {}
+
+  // Build enabled map from per-session messages: only show models that have history in this session
+  const buildEnabledFromMessages = useCallback((perModel: ModelMessages) => {
+    const next: { [key: string]: boolean } = {}
+    MODELS.forEach(m => { next[m.id] = false })
+    if (perModel) {
+      Object.keys(perModel).forEach(id => { next[id] = (perModel[id]?.length || 0) > 0 })
+    }
+    return next
+  }, [])
 
   const updateConversationTitle = useCallback(async (conversationId: string, newTitle: string) => {
     try {
@@ -703,6 +733,13 @@ function App() {
         console.error('Failed to fetch history for session', id, e)
       }
     }
+    else {
+      // If messages already exist, set enabled models from that history
+      const perModel = sessionModelMessages[id]
+      if (perModel && Object.keys(perModel).length > 0) {
+        setEnabledModels(buildEnabledFromMessages(perModel))
+      }
+    }
   }
 
   // Rename a session via backend and update local state
@@ -785,9 +822,25 @@ function App() {
           selectedVideoProviders={selectedVideoProviders}
           onToggleVideoProvider={(p, enabled) => setSelectedVideoProviders(prev => enabled ? Array.from(new Set([...prev, p])) : prev.filter(x => x !== p))}
           plan={plan}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed(v => !v)}
         />
       </div>
-      <div className="flex-1 ml-64 relative h-screen overflow-hidden">
+      {/* Reopen toggle when sidebar is collapsed */}
+      {sidebarCollapsed && showReopenBtn && (
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(false)}
+          className="fixed left-2 top-2 z-20 p-2 rounded-md bg-gray-800/90 text-white border border-gray-700 hover:bg-gray-700"
+          aria-label="Open sidebar"
+          title="Open sidebar"
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+      <div className={`flex-1 ${sidebarCollapsed ? 'ml-0' : 'ml-64'} relative h-screen overflow-hidden transition-all duration-300 ease-in-out`}>
         <MultiModelChat 
           models={enabledModelsList}
           modelMessages={currentModelMessages}
@@ -799,9 +852,9 @@ function App() {
           plan={plan}
         />
         {/* Bottom overlay to mask page edge when horizontally scrolled (exclude sidebar area) */}
-        <div className="fixed left-64 right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent" />
+        <div className={`fixed ${sidebarCollapsed ? 'left-0' : 'left-64'} right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent transition-all duration-300 ease-in-out`} />
         {/* Floating global input - anchored within the main content area (avoids overlapping sidebar footer) */}
-        <div className="fixed left-64 right-4 bottom-5 z-20 max-w-[1100px] mx-auto floating-input-safe-area">
+        <div className={`fixed ${sidebarCollapsed ? 'left-0' : 'left-64'} right-4 bottom-5 z-20 max-w-[1100px] mx-auto floating-input-safe-area transition-all duration-300 ease-in-out`}>
           <MessageInput 
             onSendMessage={handleSendMessage}
             disabled={isAnyLoading}

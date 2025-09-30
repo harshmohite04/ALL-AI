@@ -88,23 +88,36 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
   }, [isLoading])
 
   // Typewriter component for the latest assistant message
-  const TypewriterMarkdown: React.FC<{ text: string; onTick?: () => void; speed?: number }> = ({ text, onTick, speed = 18 }) => {
-    const [len, setLen] = useState(0)
+  // Persist streaming progress per message to avoid restarts on re-render
+  const streamProgressRef = useRef<Record<string, number>>({})
+  const completedRef = useRef<Record<string, boolean>>({})
+  const [completedTick, setCompletedTick] = useState(0) // force re-render when a message completes
+
+  const TypewriterMarkdown: React.FC<{ id: string; text: string; onTick?: () => void; onDone?: () => void; speed?: number }> = ({ id, text, onTick, onDone, speed = 18 }) => {
+    const [len, setLen] = useState<number>(() => streamProgressRef.current[id] ?? 0)
     useEffect(() => {
-      setLen(0)
+      // If already completed, render full text without animating
+      if (completedRef.current[id]) {
+        if (len !== text.length) {
+          setLen(text.length)
+        }
+        return
+      }
       let raf: number
       let last = performance.now()
       const step = (now: number) => {
         const delta = now - last
         const inc = Math.max(1, Math.floor(delta / speed))
-        if (len + inc >= text.length) {
-          setLen(text.length)
-          onTick?.()
-          return
-        }
         setLen((l) => {
           const next = Math.min(text.length, l + inc)
+          streamProgressRef.current[id] = next
           onTick?.()
+          if (next >= text.length) {
+            completedRef.current[id] = true
+            onDone?.()
+            setCompletedTick((t) => t + 1)
+            return next
+          }
           return next
         })
         last = now
@@ -112,8 +125,8 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
       }
       raf = requestAnimationFrame(step)
       return () => cancelAnimationFrame(raf)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [text])
+      // Only restart if text actually changes or id changes
+    }, [id, text, speed, onTick, onDone])
     return (
       <ReactMarkdown remarkPlugins={[remarkGfm]}>
         {text.slice(0, len)}
@@ -186,15 +199,89 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
   // Removed unused getModelBorderColor function
 
-  const equalMode = models.length <= 3
+  const equalMode = models.length <= 1
+
+  // Extract DeepSeek <think> blocks and fenced code ```think blocks; return visible text + thinks
+  const parseDeepseek = (text: string): { visible: string; thinks: string[] } => {
+    if (!text) return { visible: '', thinks: [] }
+    let working = text
+    const thinks: string[] = []
+    // Capture HTML-like think tags (case-insensitive, tolerate spaces)
+    working = working.replace(/<\s*think\s*>[\r\n]?([\s\S]*?)<\s*\/\s*think\s*>/gi, (_m, g1) => {
+      const cleaned = String(g1 || '').trim()
+      if (cleaned) thinks.push(cleaned)
+      return ''
+    })
+    // Capture fenced blocks labelled think
+    working = working.replace(/```\s*think\s*[\r\n]+([\s\S]*?)```/gi, (_m, g1) => {
+      const cleaned = String(g1 || '').trim()
+      if (cleaned) thinks.push(cleaned)
+      return ''
+    })
+    const visible = working.trim()
+    return { visible: visible.length ? visible : '', thinks }
+  }
+
+  // Per-message toggle for revealing hidden reasoning
+  const [thinkOpen, setThinkOpen] = useState<Record<string, boolean>>({})
+  const toggleThink = (id: string) => setThinkOpen(prev => ({ ...prev, [id]: !prev[id] }))
+
+  // Top scrollbar synced with main horizontal scroller (when not equalMode)
+  const hScrollRef = useRef<HTMLDivElement | null>(null)
+  const topScrollRef = useRef<HTMLDivElement | null>(null)
+  const syncingRef = useRef(false)
+  const [topWidth, setTopWidth] = useState(0)
+
+  // Measure and update the width for the top scrollbar when layout/content changes
+  useEffect(() => {
+    const update = () => {
+      if (hScrollRef.current) {
+        setTopWidth(hScrollRef.current.scrollWidth)
+      }
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [models, widths, equalMode])
+
+  const onMainScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
+    if (syncingRef.current) return
+    syncingRef.current = true
+    if (topScrollRef.current) topScrollRef.current.scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft
+    syncingRef.current = false
+  }
+
+  const onTopScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
+    if (syncingRef.current) return
+    syncingRef.current = true
+    if (hScrollRef.current) hScrollRef.current.scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft
+    syncingRef.current = false
+  }
 
   return (
     <div className="flex-1 overflow-hidden bg-gray-900 h-full">
-      <div className={`h-full flex ${equalMode ? 'overflow-x-hidden' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}>
+      {/* Top horizontal scrollbar (only when columns are resizable) */}
+      {!equalMode && (
+        <div className="sticky top-0 z-10 bg-gray-900">
+          <div
+            ref={topScrollRef}
+            className="overflow-x-auto overflow-y-hidden"
+            onScroll={onTopScroll}
+          >
+            {/* The inner spacer creates the scroll track; width synced to content below */}
+            <div style={{ width: topWidth, height: 1 }} />
+          </div>
+        </div>
+      )}
+      <div
+        ref={hScrollRef}
+        onScroll={equalMode ? undefined : onMainScroll}
+        className={`h-full flex ${equalMode ? 'overflow-x-hidden' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}
+      >
         {models.map((model) => (
           <div
             key={model.id}
-            className={`relative ${equalMode ? 'flex-1 min-w-0' : 'flex-shrink-0'} flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
+            className={`relative ${equalMode ? 'flex-1' : 'flex-shrink-0'} min-w-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
             style={equalMode ? undefined : { width: (widths[model.id] ?? DEFAULT_WIDTH) + 'px' }}
           >
             {/* Model Header */}
@@ -236,7 +323,8 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             {/* Chat Area */}
             <div
               ref={(el) => { listRefs.current[model.id] = el; }}
-              className="flex-1 overflow-y-auto p-4 pb-28 bg-gray-900 min-h-0 overscroll-contain"
+              className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-900 min-h-0 overscroll-contain"
+              style={{ paddingBottom: 'var(--input-height, 160px)' }}
             >
               <div className="space-y-4">
                 {modelMessages[model.id]?.map((message, idx, arr) => (
@@ -256,19 +344,29 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                                 code({ inline, className, children, ...props }: any) {
                                   if (!inline) {
                                     return (
-                                      <pre className="bg-black text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
-                                        <code className={className} {...props}>{children}</code>
+                                      <pre className="bg-gray-800 text-gray-200 rounded-lg p-4 overflow-x-hidden whitespace-pre-wrap break-words my-2">
+                                        <code className={`${className ?? ''} whitespace-pre-wrap break-words`} {...props}>{children}</code>
                                       </pre>
                                     )
                                   }
                                   return (
-                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded break-words" {...props}>{children}</code>
+                                  )
+                                },
+                                img({ src, alt, ...props }: any) {
+                                  return (
+                                    <img src={src as string} alt={alt as string} className="max-w-full h-auto rounded" {...props} />
+                                  )
+                                },
+                                a({ children, ...props }: any) {
+                                  return (
+                                    <a {...props} className="break-all text-blue-400 underline">{children}</a>
                                   )
                                 },
                                 table({ children }: any) {
                                   return (
-                                    <div className="w-full overflow-x-auto my-3">
-                                      <table className="min-w-full border border-gray-700 text-sm">{children}</table>
+                                    <div className="w-full overflow-x-hidden my-3">
+                                      <table className="min-w-full table-fixed border border-gray-700 text-sm break-words">{children}</table>
                                     </div>
                                   )
                                 },
@@ -276,10 +374,10 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                                   return <thead className="bg-gray-800">{children}</thead>
                                 },
                                 th({ children }: any) {
-                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
+                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold break-words">{children}</th>
                                 },
                                 td({ children }: any) {
-                                  return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
+                                  return <td className="border border-gray-700 px-3 py-2 align-top break-words">{children}</td>
                                 }
                               }}
                             >
@@ -308,7 +406,8 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           <div className="text-sm text-gray-300 leading-relaxed break-words">
                             {(idx === arr.length - 1 && message.animate) ? (
                               <TypewriterMarkdown
-                                text={message.content}
+                                // Animate sanitized text without <think>
+                                text={parseDeepseek(message.content).visible}
                                 onTick={() => scrollToBottom(model.id, false)}
                               />
                             ) : (
@@ -318,19 +417,19 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                                   code({ inline, className, children, ...props }: any) {
                                     if (!inline) {
                                       return (
-                                        <pre className="bg-[#151515] text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
-                                          <code className={className} {...props}>{children}</code>
+                                        <pre className="bg-gray-800 text-gray-200 rounded-lg p-4 overflow-x-hidden whitespace-pre-wrap break-words my-2">
+                                          <code className={`${className ?? ''} whitespace-pre-wrap break-words`} {...props}>{children}</code>
                                         </pre>
                                       )
                                     }
                                     return (
-                                      <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+                                      <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded break-words" {...props}>{children}</code>
                                     )
                                   },
                                   table({ children }: any) {
                                     return (
-                                      <div className="w-full overflow-x-auto my-3">
-                                        <table className="min-w-full border border-gray-700 text-sm">{children}</table>
+                                      <div className="w-full overflow-x-hidden my-3">
+                                        <table className="min-w-full table-fixed border border-gray-700 text-sm break-words">{children}</table>
                                       </div>
                                     )
                                   },
@@ -338,21 +437,48 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                                     return <thead className="bg-gray-800">{children}</thead>
                                   },
                                   th({ children }: any) {
-                                    return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th>
+                                    return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold break-words">{children}</th>
                                   },
                                   td({ children }: any) {
-                                    return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td>
+                                    return <td className="border border-gray-700 px-3 py-2 align-top break-words">{children}</td>
                                   }
                                 }}
                               >
-                                {message.content}
-                              </ReactMarkdown>
-                            )}
+                                  {parseDeepseek(message.content).visible}
+                                </ReactMarkdown>
+                              )
+                            }
                           </div>
+                          {/* DeepSeek reasoning reveal */}
+                          {(() => { const parsed = parseDeepseek(message.content); return parsed.thinks.length > 0 ? (
+                            <div className="mt-2">
+                              {/* Inline hint to make it discoverable */}
+                              {!thinkOpen[message.id] && (
+                                <div className="text-[11px] text-gray-400 mb-1">Reasoning hidden</div>
+                              )}
+                              <button
+                                className="text-[11px] px-2 py-1 rounded bg-gray-800 text-gray-200 hover:bg-gray-700"
+                                onClick={() => toggleThink(message.id)}
+                                aria-expanded={!!thinkOpen[message.id]}
+                                aria-controls={`think-${message.id}`}
+                              >
+                                {thinkOpen[message.id] ? 'Hide reasoning' : 'Show reasoning'}
+                              </button>
+                              {thinkOpen[message.id] && (
+                                <div id={`think-${message.id}`} className="mt-2 space-y-2">
+                                  {parsed.thinks.map((t, i) => (
+                                    <pre key={i} className="bg-gray-800 text-gray-200 rounded-lg p-3 overflow-x-hidden whitespace-pre-wrap break-words text-xs border border-gray-700">
+{t}
+                                    </pre>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : null })()}
                           <div className="flex items-center gap-2 mt-3">
                             <button
                               className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors text-xs"
-                              onClick={() => handleCopy(message.content, message.id)}
+                              onClick={() => handleCopy(parseDeepseek(message.content).visible, message.id)}
                               aria-label="Copy response"
                               title={copiedId === message.id ? 'Copied!' : 'Copy'}
                             >

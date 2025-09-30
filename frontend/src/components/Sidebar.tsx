@@ -36,9 +36,12 @@ interface SidebarProps {
   selectedVideoProviders: Array<'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>
   onToggleVideoProvider: (p: 'Runway Gen-2' | 'Nano Banana' | 'Google Veo', enabled: boolean) => void
   plan: 'basic' | 'premium'
+  // collapse
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan }: SidebarProps) {
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan, collapsed = false, onToggleCollapsed }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'
@@ -77,7 +80,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   }
 
   // Resolve logo URLs similar to MultiModelChat
-  const logoModules = import.meta.glob('../assets/logos/*.{svg,png,jpg,jpeg,webp}', { eager: true, as: 'url' }) as Record<string, string>
+  const logoModules = import.meta.glob('../assets/logos/*.{svg,png,jpg,jpeg,webp}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
   const getLogoUrl = (modelId: string): string | null => {
     const entry = Object.entries(logoModules).find(([path]) => path.includes(`/logos/${modelId}.`))
     return entry ? entry[1] : null
@@ -191,9 +194,21 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   const email = user?.email || ''
 
   return (
-    <div className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col h-full shadow-2xl">
+    <div className={`w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col h-full shadow-2xl transform will-change-transform transition-all duration-300 ease-in-out ${collapsed ? '-translate-x-full opacity-0' : 'translate-x-0 opacity-100'}`}>
       {/* Header */}
-      <div className="p-6 border-b border-gray-700/50">
+      <div className="p-6 border-b border-gray-700/50 relative transition-opacity duration-200">
+        {/* Collapse toggle */}
+        <button
+          type="button"
+          onClick={() => onToggleCollapsed?.()}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand' : 'Collapse'}
+          className="absolute right-2 top-2 p-1.5 rounded-md text-gray-300 hover:text-white hover:bg-gray-700/60 transition-colors"
+        >
+          <svg className={`w-4 h-4 transition-transform duration-300 ease-in-out ${collapsed ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
         <div className="flex items-center gap-3 mb-4">
           <img src="/allmodels.png" alt="All Models" className="w-8 h-8 rounded-lg" />
           <div>

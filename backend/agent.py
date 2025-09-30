@@ -45,7 +45,7 @@ def OpenAI(state: AgentState) -> AgentState:
 
 def Google(state: AgentState) -> AgentState:
     print("Google called ...")
-    system_prompt=""""""
+    system_prompt="""Make sure you answer user in small answer and not big"""
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", "{input}")
@@ -56,6 +56,8 @@ def Google(state: AgentState) -> AgentState:
     print(google_model_name)
     chain = prompt | llm_ChatGoogleGenerativeAI(google_model_name)
     response = chain.invoke(google_messages)
+    print("Gemini")
+    print(response)
     return {"google_messages": response}
 
 def Groq(state: AgentState) -> AgentState:
@@ -70,6 +72,7 @@ def Groq(state: AgentState) -> AgentState:
     print(groq_model_name)
     chain = prompt | llm_ChatGroq(groq_model_name)
     response = chain.invoke(groq_messages)
+    # print(response)
     return {"groq_messages": response}
 
 def Meta(state:AgentState)->AgentState:
