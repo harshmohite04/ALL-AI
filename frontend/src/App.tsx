@@ -5,6 +5,18 @@ import MessageInput from './components/MessageInput'
 import { useAuth } from './auth/AuthContext'
 import { generateTitleFromMessage, generateTitleFromMessages, setChatUrlFunction } from './utils/titleGenerator'
 
+import OpenAI from './assets/logos/chatgpt.png'
+import Google from './assets/logos/gemini.png'
+import Meta from './assets/logos/meta.jpg'
+import Groq from './assets/logos/groq.png'
+import Grok from './assets/logos/grok.svg'
+import Claude from './assets/logos/claude.png'
+import Perplexity from './assets/logos/Perplexity.jpg'
+import Cohere from './assets/logos/cohere.png'
+import Deepseek from './assets/logos/deepseek.png'
+import Mistral from './assets/logos/mistral.png'
+import Alibaba from './assets/logos/alibaba.png'
+
 // Base URL for FastAPI chat/session service.
 // In dev, leave empty so Vite proxy handles relative paths like '/chat', '/session', '/history'.
 // In production, set VITE_CHAT_BASE_URL to your backend URL (e.g., https://your-host or http://35.238.224.160:8000).
@@ -46,9 +58,9 @@ interface ModelMessages {
 const MODELS = [
   { 
     id: 'chatgpt', 
-    name: 'ChatGPT 5', 
+    name: 'ChatGPT', 
     color: 'green', 
-    icon: '🤖',
+    icon: OpenAI,
     versions: ['gpt-4o', 'gpt-4-turbo', 'gpt-5', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'],
     // Used to map to backend provider keys
     providerKey: 'OpenAI'
@@ -57,7 +69,7 @@ const MODELS = [
     id: 'gemini', 
     name: 'Gemini 2.5 Pro', 
     color: 'blue', 
-    icon: '💎',
+    icon: Google,
     versions: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
     providerKey: 'Google'
   }
@@ -66,7 +78,7 @@ const MODELS = [
     id: 'deepseek', 
     name: 'DeepSeek', 
     color: 'indigo', 
-    icon: '🔍',
+    icon: Deepseek,
     versions: ['deepseek-r1-distill-llama-70b'],
     providerKey: 'Deepseek'
   }
@@ -75,7 +87,7 @@ const MODELS = [
     id: 'groq', 
     name: 'Groq', 
     color: 'indigo', 
-    icon: '🔍',
+    icon: Groq,
     versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b','llama-3.3-70b-versatile'],
     providerKey: 'Groq'
   }
@@ -84,7 +96,7 @@ const MODELS = [
     id: 'grok', 
     name: 'Grok', 
     color: 'indigo', 
-    icon: '🔍',
+    icon: Grok,
     versions: ['deepseek-chat', 'deepseek-coder']
   }
   ,
@@ -92,7 +104,7 @@ const MODELS = [
     id: 'claude', 
     name: 'Claude', 
     color: 'indigo', 
-    icon: '🔍',
+    icon: Claude,
     versions: ['deepseek-chat', 'deepseek-coder']
   }
   ,
@@ -100,7 +112,7 @@ const MODELS = [
     id: 'perplexity', 
     name: 'Perplexity', 
     color: 'orange', 
-    icon: '🧠',
+    icon: Perplexity,
     versions: ['sonar-small-online', 'sonar-large-online']
   }
   ,
@@ -108,7 +120,7 @@ const MODELS = [
     id: 'cohere', 
     name: 'Cohere', 
     color: 'teal', 
-    icon: '🌊',
+    icon: Cohere,
     versions: ['command-r', 'command-r-plus']
   }
   ,
@@ -116,7 +128,7 @@ const MODELS = [
     id: 'meta', 
     name: 'Meta', 
     color: 'pink', 
-    icon: '🦙',
+    icon: Meta,
     versions: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'],
     providerKey: 'Meta'
   }
@@ -125,7 +137,7 @@ const MODELS = [
     id: 'mistral', 
     name: 'Mistral', 
     color: 'purple', 
-    icon: '🌬️',
+    icon: Mistral,
     versions: ['mistral-small', 'mistral-large']
   }
   ,
@@ -133,7 +145,7 @@ const MODELS = [
     id: 'alibaba', 
     name: 'Alibaba', 
     color: 'red', 
-    icon: '🀄',
+    icon: Alibaba,
     versions: ['qwen/qwen3-32b'],
     providerKey: 'Alibaba'
   }
@@ -151,22 +163,22 @@ function App() {
   const DISPLAY_MODELS = MODELS
 
   const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
-    chatgpt: true,
+    chatgpt: false,
     gemini: true,
-    deepseek: false,
+    deepseek: true,
     groq: true,
     grok: false,
     claude: false,
     perplexity: false,
     cohere: false,
-    meta: false,
+    meta: true,
     mistral: false,
     alibaba: false
   })
 
   const [selectedVersions, setSelectedVersions] = useState<{[key: string]: string}>({
     // Single ChatGPT across plans
-    chatgpt: 'gpt-4o',
+    chatgpt: 'openai/gpt-oss-20b',
     gemini: 'gemini-2.0-flash',
     deepseek: 'deepseek-r1-distill-llama-70b',
     groq: 'openai/gpt-oss-20b',

@@ -13,6 +13,7 @@ from agent_schema import AgentState
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from pymongo import MongoClient
 import os
+from langchain_core.prompts import ChatPromptTemplate 
 
 MONGO_URI=os.getenv("MONGO_URI",)
 client = MongoClient(MONGO_URI)
@@ -44,18 +45,31 @@ def OpenAI(state: AgentState) -> AgentState:
 
 def Google(state: AgentState) -> AgentState:
     print("Google called ...")
+    system_prompt=""""""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", "{input}")
+    ])
+    
     google_messages = state["google_messages"]
     google_model_name = state["selected_models"]["Google"]
     print(google_model_name)
-    response = llm_ChatGoogleGenerativeAI(google_model_name).invoke(google_messages)
+    chain = prompt | llm_ChatGoogleGenerativeAI(google_model_name)
+    response = chain.invoke(google_messages)
     return {"google_messages": response}
 
 def Groq(state: AgentState) -> AgentState:
     print("Groq called..")
+    system_prompt="""Make sure you answer user in small answer and not big"""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", "{input}")
+    ])
     groq_messages = state["groq_messages"]
     groq_model_name = state["selected_models"]["Groq"]
     print(groq_model_name)
-    response = llm_ChatGroq(groq_model_name).invoke(groq_messages)
+    chain = prompt | llm_ChatGroq(groq_model_name)
+    response = chain.invoke(groq_messages)
     return {"groq_messages": response}
 
 def Meta(state:AgentState)->AgentState:

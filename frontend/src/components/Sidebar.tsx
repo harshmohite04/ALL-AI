@@ -317,7 +317,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
               <div key={model.id} className="flex items-center justify-between px-2 py-2 border-b border-gray-700/40">
                 <div className="flex items-center gap-2 min-w-0">
                   {getLogoUrl(model.id) ? (
-                    <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-4 h-4 object-contain" />
+                    <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-7 h-7 object-contain rounded-full" />
                   ) : (
                     <div className="w-4 h-4 bg-gray-600 rounded flex items-center justify-center text-[10px]">
                       <span>{model.icon}</span>
