@@ -72,8 +72,8 @@ const MODELS = [
     icon: Google,
     versions: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
     providerKey: 'Google'
-  }
-  ,
+  },
+
   { 
     id: 'deepseek', 
     name: 'DeepSeek', 
@@ -81,8 +81,8 @@ const MODELS = [
     icon: Deepseek,
     versions: ['deepseek-r1-distill-llama-70b'],
     providerKey: 'Deepseek'
-  }
-  ,
+  },
+
   { 
     id: 'groq', 
     name: 'Groq', 
@@ -193,6 +193,9 @@ function App() {
   const [activeRole, setActiveRole] = useState<string>('General')
   const [selectedImageProviders, setSelectedImageProviders] = useState<Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>>([])
   const [selectedVideoProviders, setSelectedVideoProviders] = useState<Array<'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>>([])
+
+  // Overlay when applying role recommendations
+  const [roleOverlay, setRoleOverlay] = useState<null | { role: string; ids: string[] }>(null)
 
   // UI: Sidebar collapsed state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -712,6 +715,42 @@ function App() {
     }
   }
 
+  // Enhance a prompt using ChatGPT OSS only (OpenAI OSS model via backend /chat)
+  const handleEnhancePrompt = useCallback(async (raw: string): Promise<string> => {
+    try {
+      const timestamp = new Date()
+      const openaiModel = MODELS.find(m => m.id === 'chatgpt')
+      const version = selectedVersions['chatgpt'] || 'openai/gpt-oss-20b'
+      if (!openaiModel) return raw
+
+      const selected_models: { [key: string]: string } = { OpenAI: version }
+      const instruction = `You are a prompt enhancer. Rewrite the user's prompt to be clear, specific, and goal-oriented; preserve intent, add necessary constraints (format, tone, audience), and include example I/O if helpful. Output only the improved prompt without extra commentary.`
+      const composed = `${instruction}\n\nUser prompt:\n${raw.trim()}`
+
+      const res = await fetch(chatUrl('/chat'), {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          user_query: composed,
+          selected_models,
+          session_id: activeSessionId,
+          client_time: toLocalIsoWithOffset(timestamp),
+        })
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json().catch(() => ({}))
+      const text = (data?.responses?.OpenAI ?? data?.OpenAI ?? '').toString()
+      return (text || '').trim() || raw
+    } catch (e) {
+      console.error('Enhance failed', e)
+      return raw
+    }
+  }, [activeSessionId, selectedVersions, token])
+
   const enabledModelsList = DISPLAY_MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
   const isAnyLoading = Object.values(currentLoading).some(Boolean)
@@ -799,6 +838,159 @@ function App() {
     }
   }
 
+  // Small inline overlay component for role loading UX
+  const ModelLoadingOverlay: React.FC<{ role: string; logos: Array<{ src: string; alt: string }>; onDone?: () => void; durationMs?: number }>
+    = ({ role, logos, onDone, durationMs = 5000 }) => {
+    const [reveal, setReveal] = useState(0)
+    const [progress, setProgress] = useState(0)
+    useEffect(() => {
+      // Reveal all logos quickly (within ~1.2s), regardless of total duration
+      const quickWindow = 1200
+      const step = Math.max(100, Math.floor(quickWindow / Math.max(1, logos.length)))
+      const logoTimer = window.setInterval(() => {
+        setReveal((r) => (r < logos.length ? r + 1 : r))
+      }, step)
+      // Progress bar smoother tick
+      const progTimer = window.setInterval(() => {
+        setProgress((p) => Math.min(100, p + 100 * 200 / durationMs))
+      }, 200)
+      const doneTimer = window.setTimeout(() => {
+        onDone?.()
+      }, durationMs)
+      return () => {
+        window.clearInterval(logoTimer)
+        window.clearInterval(progTimer)
+        window.clearTimeout(doneTimer)
+      }
+    }, [logos.length, durationMs, onDone])
+
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        {/* Center card */}
+        <div className="relative z-50 w-[420px] max-w-[90vw]">
+          <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-tr from-blue-400/40 via-cyan-300/30 to-emerald-300/30 opacity-60 blur-md" />
+          <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-gray-900/95 to-gray-950/95 shadow-[0_0_80px_-20px_rgba(59,130,246,0.6)] p-6 animate-in fade-in-0 zoom-in-95">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h3 className="text-sm font-semibold text-white">Optimizing your workspace</h3>
+            </div>
+            <div className="text-[13px] text-gray-300 leading-5">
+              <div className="font-medium text-white mb-1">Loading the best models for “{role}”.</div>
+              <div className="opacity-90">Trusted, production-grade providers—curated for accuracy, speed, and reliability so you can focus on outcomes.</div>
+            </div>
+            {/* Progress */}
+            <div className="mt-4">
+              <div className="w-full h-2 rounded-full bg-gray-800 overflow-hidden border border-gray-700/60">
+                <div className="h-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-400" style={{ width: `${progress}%`, transition: 'width 180ms ease' }} />
+              </div>
+              <div className="mt-2 text-[11px] text-gray-400 flex items-center gap-2">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-emerald-500/20 text-emerald-300">✓</span>
+                Trustworthy defaults, adjustable anytime
+              </div>
+            </div>
+            {/* Logos */}
+            <div className="mt-4 grid grid-cols-5 gap-3 justify-items-center">
+              {logos.slice(0, reveal).map((l, i) => (
+                <div key={i} className="w-12 h-12 rounded-xl bg-gray-800/80 border border-gray-700/60 flex items-center justify-center shadow transition transform animate-in fade-in-0 zoom-in-95" style={{ animationDelay: `${i * 60}ms` }}>
+                  <img src={l.src} alt={l.alt} className="w-8 h-8 object-contain drop-shadow-[0_0_6px_rgba(59,130,246,0.35)]" />
+                </div>
+              ))}
+            </div>
+            {/* Floating accents */}
+            <div className="pointer-events-none absolute -top-6 -right-6 h-16 w-16 rounded-full bg-cyan-400/10 blur-xl" />
+            <div className="pointer-events-none absolute -bottom-6 -left-10 h-24 w-24 rounded-full bg-emerald-400/10 blur-2xl" />
+            <div className="mt-4 flex items-center justify-between text-[11px] text-gray-400">
+              <span>Secured by design</span>
+              <span>Optimized for best performance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Map roles to recommended models and preferred versions
+  const ROLE_RECOMMENDATIONS: Record<string, { ids: string[]; versions?: Partial<{ [k: string]: string }> }> = {
+    // Finance: GPT-4.1 + Gemini 1.5 Pro + Cohere (Command R or FinGPT)
+    Finance: {
+      ids: ['chatgpt', 'gemini', 'cohere'],
+      versions: {
+        chatgpt: 'gpt-4-turbo',
+        gemini: 'gemini-1.5-pro',
+        cohere: 'command-r',
+      }
+    },
+    // Marketing (Creative + Persuasive): Claude + GPT-4.1 + Gemini 1.5 Pro
+    Marketing: {
+      ids: ['claude', 'chatgpt', 'gemini'],
+      versions: {
+        chatgpt: 'gpt-4o',
+        gemini: 'gemini-1.5-pro',
+      }
+    },
+    // Coding: GPT-4.1 + Claude + Llama-3 fine-tuned (map to Meta Llama-3.x)
+    Coding: {
+      ids: ['chatgpt', 'claude', 'meta'],
+      versions: {
+        chatgpt: 'gpt-4o',
+        meta: 'llama-3.3-70b-versatile',
+      }
+    },
+    // Learning: Claude + GPT-4.1 + Gemini 1.5 Pro + Notebook LLM (Notebook LLM not in catalog)
+    Learning: {
+      ids: ['claude', 'chatgpt', 'gemini'],
+      versions: {
+        chatgpt: 'gpt-4o',
+        gemini: 'gemini-1.5-pro',
+      }
+    },
+    // Coder (existing label in sidebar) maps to Coding
+    Coder: {
+      ids: ['chatgpt', 'claude', 'meta'],
+      versions: {
+        chatgpt: 'gpt-4o',
+        meta: 'llama-3.3-70b-versatile',
+      }
+    },
+  }
+
+  // Apply role: show popup and enable only recommended models (respect plan locks)
+  const handleRoleChange = useCallback((role: string) => {
+    setActiveRole(role)
+
+    const rec = ROLE_RECOMMENDATIONS[role]
+    if (!rec) return
+
+    // Prepare overlay up to 5 seconds — show ALL recommended logos (even if some are premium-locked)
+    const overlayIds: string[] = rec.ids.filter(id => !!MODELS.find(m => m.id === id))
+    setRoleOverlay({ role, ids: overlayIds })
+    window.setTimeout(() => setRoleOverlay(null), 5000)
+
+    // Build enabled map: only recommended models true, others false
+    const nextEnabled: { [key: string]: boolean } = {}
+    MODELS.forEach(m => { nextEnabled[m.id] = false })
+    rec.ids.forEach(id => {
+      // Respect plan locks: do not enable premium-locked models on basic plan
+      if (plan === 'basic' && BASIC_LOCKED.has(id)) return
+      if (MODELS.find(m => m.id === id)) nextEnabled[id] = true
+    })
+    setEnabledModels(nextEnabled)
+
+    // Optionally adjust preferred versions if present and valid in catalog
+    setSelectedVersions(prev => {
+      const updated = { ...prev }
+      Object.entries(rec.versions || {}).forEach(([id, ver]) => {
+        const model = MODELS.find(m => m.id === id)
+        if (model && Array.isArray(model.versions) && ver && model.versions.includes(ver as string)) {
+          updated[id] = ver as string
+        }
+      })
+      return updated
+    })
+  }, [BASIC_LOCKED, MODELS, plan])
+
   return (
     <div className="flex h-screen bg-gray-900">
       <div className="fixed left-0 top-0 h-full z-10">
@@ -816,7 +1008,7 @@ function App() {
           onRenameConversation={handleRenameConversation}
           onDeleteConversation={handleDeleteConversation}
           activeRole={activeRole}
-          onRoleChange={setActiveRole}
+          onRoleChange={handleRoleChange}
           selectedImageProviders={selectedImageProviders}
           onToggleImageProvider={(p, enabled) => setSelectedImageProviders(prev => enabled ? Array.from(new Set([...prev, p])) : prev.filter(x => x !== p))}
           selectedVideoProviders={selectedVideoProviders}
@@ -860,8 +1052,21 @@ function App() {
             disabled={isAnyLoading}
             enabledCount={enabledCount}
             variant="floating"
+            onEnhancePrompt={handleEnhancePrompt}
           />
         </div>
+        {/* Role recommendation overlay */}
+        {roleOverlay && (
+          <ModelLoadingOverlay
+            role={roleOverlay.role}
+            logos={roleOverlay.ids.map(id => {
+              const m = MODELS.find(x => x.id === id)
+              return { src: (m as any)?.icon as string, alt: m?.name || id }
+            })}
+            durationMs={5000}
+            onDone={() => setRoleOverlay(null)}
+          />
+        )}
       </div>
     </div>
   )

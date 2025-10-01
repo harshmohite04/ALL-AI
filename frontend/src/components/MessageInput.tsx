@@ -5,9 +5,10 @@ interface MessageInputProps {
   disabled?: boolean
   enabledCount?: number
   variant?: 'default' | 'floating'
+  onEnhancePrompt?: (raw: string) => Promise<string>
 }
 
-export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default' }: MessageInputProps) {
+export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default', onEnhancePrompt }: MessageInputProps) {
   const [message, setMessage] = useState('')
   const [showPopup, setShowPopup] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -16,6 +17,8 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
   const [selectedGen, setSelectedGen] = useState<null | 'image' | 'video'>(null)
   const [selectedImageModels, setSelectedImageModels] = useState<Array<'Midjourney' | 'DALL·E 3' | 'Stable Diffusion'>>([])
   const [selectedVideoModels, setSelectedVideoModels] = useState<Array<'Text-to-Video' | 'Runway Gen-2' | 'Nano Banana' | 'Google Veo'>>([])
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhanceNotice, setEnhanceNotice] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -144,6 +147,41 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
     console.log('Selected option:', option)
     setShowPopup(false)
     // Here you can add specific functionality for each option
+  }
+
+  const handleEnhance = async () => {
+    if (disabled) return
+    const raw = message.trim()
+    if (!raw) {
+      setEnhanceNotice('Please enter a prompt to enhance.')
+      window.setTimeout(() => setEnhanceNotice(null), 2000)
+      // brief shake effect
+      const el = textareaRef.current
+      if (el) {
+        el.classList.add('ring-2','ring-red-500')
+        setTimeout(() => el.classList.remove('ring-2','ring-red-500'), 500)
+      }
+      return
+    }
+    if (!onEnhancePrompt) return
+    try {
+      setEnhancing(true)
+      const improved = await onEnhancePrompt(raw)
+      setMessage(improved)
+      // focus back
+      setTimeout(() => textareaRef.current?.focus(), 0)
+      // success glow
+      const el = textareaRef.current
+      if (el) {
+        el.classList.add('ring-2','ring-emerald-500')
+        setTimeout(() => el.classList.remove('ring-2','ring-emerald-500'), 700)
+      }
+    } catch (e) {
+      setEnhanceNotice('Could not enhance right now. Try again in a moment.')
+      window.setTimeout(() => setEnhanceNotice(null), 2000)
+    } finally {
+      setEnhancing(false)
+    }
   }
 
   return (
@@ -280,6 +318,28 @@ export default function MessageInput({ onSendMessage, disabled = false, enabledC
               d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" 
             />
           </svg>
+        </button>
+        {/* Enhance Button (magic) */}
+        <button
+          type="button"
+          onClick={handleEnhance}
+          disabled={disabled || enhancing}
+          className={
+            variant === 'floating'
+              ? `absolute right-20 ${expanded ? 'bottom-4' : 'top-1/2 -translate-y-1/2'} w-8 h-8 rounded-full transition-all duration-200 flex items-center justify-center ${enhancing ? 'bg-gradient-to-r from-fuchsia-600 via-violet-600 to-cyan-500 animate-pulse' : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'}`
+              : `absolute right-24 ${expanded ? 'bottom-5' : 'top-1/2 -translate-y-1/2'} w-10 h-10 rounded-full transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center ${enhancing ? 'bg-gradient-to-r from-fuchsia-600 via-violet-600 to-cyan-500 animate-pulse' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'}`
+          }
+          onMouseDown={(e) => e.preventDefault()}
+          title="Enhance prompt"
+          aria-label="Enhance prompt"
+        >
+          {/* Magic wand icon */}
+          <svg className={variant === 'floating' ? 'w-4 h-4' : 'w-5 h-5'} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7l-7 7m8-3l3 3m-1-8l2-2m-6 0l1-3m-9 9l-3 1m6 5l-2 2" />
+          </svg>
+          {enhancing && (
+            <span className="absolute inset-0 rounded-full ring-2 ring-pink-400/60 animate-ping" />
+          )}
         </button>
         <button
           onClick={handleSubmit}

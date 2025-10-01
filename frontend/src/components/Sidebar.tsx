@@ -48,7 +48,7 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
 
   // Roles list (simple example)
-  const [roles] = useState<string[]>(['General', 'Finance', 'Coder', 'Image Generation', 'Marketing', 'Video Generation'])
+  const [roles] = useState<string[]>(['General', 'Finance', 'Coder', 'Learning', 'Image Generation', 'Marketing', 'Video Generation'])
 
   // Basic plan locks (deepseek is allowed for basic)
   const BASIC_LOCKED = new Set(['claude', 'perplexity', 'cohere', 'grok'])
@@ -382,9 +382,17 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
               <button
                 key={role}
                 onClick={() => onRoleChange(role)}
-                className={`w-full text-left p-2 rounded-lg transition-all duration-200 text-sm ${activeRole === role ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'}`}
+                aria-pressed={activeRole === role}
+                className={`w-full p-2 rounded-lg transition-all duration-200 text-sm flex items-center justify-between ${activeRole === role ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'}`}
               >
                 <div className="truncate">{role}</div>
+                {activeRole === role && (
+                  <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                )}
               </button>
             ))}
           </div>

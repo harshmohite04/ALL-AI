@@ -290,8 +290,9 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                 {getLogoUrl(model.id) ? (
                   <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-6 h-6 object-contain" />
                 ) : (
-                  <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
-                    <span className="text-sm">{model.icon}</span>
+                  <div className="w-6 h-6  rounded-full flex items-center justify-center">
+                    {/* <span className="text-sm">{model.icon}</span> */}
+                    <img src={model.icon} alt={`${model.name} logo`} className="w-6 h-6 object-contain" />
                   </div>
                 )}
                 <div className="w-28 truncate"><h3 className="font-medium text-sm text-white">{model.name}</h3></div>
@@ -398,8 +399,9 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                         {getLogoUrl(model.id) ? (
                           <img src={getLogoUrl(model.id)!} alt={`${model.name} logo`} className="w-8 h-8 object-contain rounded" />
                         ) : (
-                          <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
-                            <span className="text-white text-sm">{model.icon}</span>
+                          <div className={`w-8 h-8  rounded-full flex items-center justify-center flex-shrink-0`}>
+                            {/* <span className="text-white text-sm">{model.icon}</span> */}
+                            <img src={model.icon} alt={`${model.name} logo`} className="w-6 h-6 object-contain" />
                           </div>
                         )}
                         <div className="flex-1">
@@ -512,8 +514,9 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
                 {isLoading[model.id] && (
                   <div className="flex items-start gap-3 mb-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-                    <div className={`w-8 h-8 ${getModelColor(model.color)} rounded-full flex items-center justify-center flex-shrink-0`}>
-                      <span className="text-white text-sm">{model.icon}</span>
+                    <div className={`w-8 h-8  rounded-full flex items-center justify-center flex-shrink-0`}>
+                      {/* <span className="text-white text-sm">{model.icon}</span> */}
+                      <img src={model.icon} alt={`${model.name} logo`} className="w-6 h-6 object-contain" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
