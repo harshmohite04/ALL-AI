@@ -304,7 +304,12 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                   options={((model as any).versions as string[] | undefined)?.map((v: string) => ({
                     label: v,
                     value: v,
-                    disabled: model.id === 'chatgpt' && plan === 'basic' && !['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(v),
+                    disabled:
+                      // Lock ChatGPT premium variants for basic
+                      (model.id === 'chatgpt' && plan === 'basic' && !['openai/gpt-oss-120b','openai/gpt-oss-20b'].includes(v))
+                      ||
+                      // Lock DeepSeek premium endpoints for basic
+                      (model.id === 'deepseek' && plan === 'basic' && ['deepseek-chat','deepseek-reasoner'].includes(v)),
                   })) ?? []}
                   value={selectedVersions[model.id]}
                   onChange={(val) => onVersionChange(model.id, val)}
@@ -410,8 +415,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                               <TypewriterMarkdown
                                 // Animate sanitized text without <think>
                                 text={parseDeepseek(message.content).visible}
-                                onTick={() => scrollToBottom(model.id, false)}
-                              />
+                                onTick={() => scrollToBottom(model.id, false)} id={''}                              />
                             ) : (
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
@@ -470,7 +474,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                                 <div id={`think-${message.id}`} className="mt-2 space-y-2">
                                   {parsed.thinks.map((t, i) => (
                                     <pre key={i} className="bg-gray-800 text-gray-200 rounded-lg p-3 overflow-x-hidden whitespace-pre-wrap break-words text-xs border border-gray-700">
-{t}
+                                      {t}
                                     </pre>
                                   ))}
                                 </div>

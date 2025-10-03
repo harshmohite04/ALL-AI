@@ -1,9 +1,10 @@
 from langgraph.graph import START, END, StateGraph
 from constants import (
     llm_ChatOpenAI,
-    # llm_ChatAnthropic,
+    llm_ChatAnthropic,
     llm_ChatGoogleGenerativeAI,
     llm_ChatGroq,
+    llm_ChatDeepseek,
     # llm_ChatPerplexity,
     # llm_ChatXAI,
 )
@@ -88,9 +89,27 @@ def Deepseek(state:AgentState)->AgentState:
     deepseek_messages = state["deepseek_messages"]
     deepseek_model_name = state["selected_models"]["Deepseek"]
     print(deepseek_model_name)
-    response = llm_ChatGroq(deepseek_model_name).invoke(deepseek_messages)
+    if deepseek_model_name in ['deepseek-r1-distill-llama-70b']:
+        response = llm_ChatGroq(deepseek_model_name).invoke(deepseek_messages)
+    else:
+        response = llm_ChatDeepseek(deepseek_model_name).invoke(deepseek_messages)
     return {"deepseek_messages":response}
 
+def Anthropic(state: AgentState) -> AgentState:
+    print("Anthropic called...")
+    # system_prompt="""Make sure you answer user in small answer and not big"""
+    # prompt = ChatPromptTemplate.from_messages([
+    #     ("system", system_prompt),
+    #     ("user", "{input}")
+    # ])
+    
+    anthropic_messages = state["anthropic_messages"]
+    anthropic_model_name = state["selected_models"]["Anthropic"]
+    print(anthropic_model_name)
+    # chain = prompt| llm_ChatAnthropic(anthropic_model_name)
+    response = llm_ChatAnthropic(anthropic_model_name).invoke(anthropic_messages)
+    print(response)
+    return {"anthropic_messages": response}
 
 
 def Alibaba(state:AgentState)->AgentState:
@@ -109,6 +128,7 @@ graph.add_node("Groq", Groq)
 graph.add_node("Meta", Meta)
 graph.add_node("Deepseek", Deepseek)
 graph.add_node("Alibaba", Alibaba)
+graph.add_node("Anthropic", Anthropic)
 
 
 
@@ -122,6 +142,7 @@ graph.add_conditional_edges(
         "Meta": "Meta",
         "Deepseek": "Deepseek",
         "Alibaba": "Alibaba",
+        "Anthropic": "Anthropic",
         END: END,
     },
 )
@@ -131,12 +152,13 @@ graph.add_edge("Google", END)
 graph.add_edge("Meta", END)
 graph.add_edge("Groq", END)
 graph.add_edge("Deepseek", END)
+graph.add_edge("Anthropic", END)
 graph.add_edge("Alibaba", END)
 
 checkpointer = MongoDBSaver(collection)
 workflow = graph.compile(checkpointer=checkpointer)
 
-# config1 = {"configurable": {"thread_id": "11112111111"}}
+# config1 = {"configurable": {"thread_id": "111121a11111"}}
 
 # result = workflow.invoke(
 #     {
@@ -144,18 +166,23 @@ workflow = graph.compile(checkpointer=checkpointer)
 #         "google_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
 #         "groq_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
 #         "meta_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
+#         "anthropic_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
 #         "selected_models": {
 #             # 'OpenAI': 'gpt-4o',
 #             'Google': 'gemini-2.0-flash',
 #             'Groq': 'openai/gpt-oss-20b',
 #             'Meta': 'llama-3.3-70b-versatile',
+#             'Anthropic': 'claude-3-haiku-20240307',
 #         },
 #     },
 #     config=config1,
 # )
 
-# for i in result["meta_messages"]:
-#     print(i.content)
+# for i in result["anthropic_messages"]:
+#     print(i)
+        
+    
+    
 # result = workflow.invoke(
 #     {
 #         "openai_messages": [HumanMessage(content="My name is Harsh Mohite")],

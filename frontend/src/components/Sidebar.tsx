@@ -48,7 +48,18 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
   const [activeTab, setActiveTab] = useState<'chat' | 'model' | 'role'>('chat')
 
   // Roles list (simple example)
-  const [roles] = useState<string[]>(['General', 'Finance', 'Coder', 'Learning', 'Image Generation', 'Marketing', 'Video Generation'])
+  const [roles] = useState<string[]>([
+    'General',
+    'Finance',
+    'Coding',
+    'Coder',
+    'Legal',
+    'Doctor',
+    'Learning',
+    'Marketing',
+    'Image Generation',
+    'Video Generation',
+  ])
 
   // Basic plan locks (deepseek is allowed for basic)
   const BASIC_LOCKED = new Set(['claude', 'perplexity', 'cohere', 'grok'])

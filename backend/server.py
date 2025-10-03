@@ -161,6 +161,7 @@ def create_session(data: SessionCreate):
     # Validate and normalize email
     if not is_valid_email(data.account_id):
         raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    
     normalized_email = data.account_id.strip().lower()
     session_id = str(uuid4())
     new_session = {

@@ -67,10 +67,10 @@ const MODELS = [
   },
   { 
     id: 'gemini', 
-    name: 'Gemini 2.5 Pro', 
+    name: 'Gemini', 
     color: 'blue', 
     icon: Google,
-    versions: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+    versions: ['gemini-2.0-flash', 'gemini-2.5-pro'],
     providerKey: 'Google'
   },
 
@@ -79,7 +79,7 @@ const MODELS = [
     name: 'DeepSeek', 
     color: 'indigo', 
     icon: Deepseek,
-    versions: ['deepseek-r1-distill-llama-70b'],
+    versions: ['deepseek-r1-distill-llama-70b','deepseek-chat','deepseek-reasoner'],
     providerKey: 'Deepseek'
   },
 
@@ -105,7 +105,8 @@ const MODELS = [
     name: 'Claude', 
     color: 'indigo', 
     icon: Claude,
-    versions: ['deepseek-chat', 'deepseek-coder']
+    versions: ['claude-sonnet-4-5-20250929','claude-sonnet-4-20250514','claude-3-7-sonnet-latest','claude-opus-4-1-20250805','claude-opus-4-20250514','claude-3-5-haiku-latest','claude-3-haiku-20240307'],
+    providerKey: 'Anthropic'
   }
   ,
   { 
@@ -186,7 +187,8 @@ function App() {
     cohere: 'command-r',
     meta: 'llama-3.1-8b-instant',
     mistral: 'mistral-small',
-    alibaba: 'qwen/qwen3-32b'
+    alibaba: 'qwen/qwen3-32b',
+    claude: 'claude-3-haiku-20240307'
   })
 
   // Role and media generation selections
@@ -317,6 +319,7 @@ function App() {
       meta_messages: 'Meta',
       deepseek_messages: 'Deepseek',
       alibaba_messages: 'Alibaba',
+      anthropic_messages: 'Anthropic',
     }
 
     // Initialize empty per-model messages and only take the first history step (index 0)
@@ -724,7 +727,7 @@ function App() {
       if (!openaiModel) return raw
 
       const selected_models: { [key: string]: string } = { OpenAI: version }
-      const instruction = `You are a prompt enhancer. Rewrite the user's prompt to be clear, specific, and goal-oriented; preserve intent, add necessary constraints (format, tone, audience), and include example I/O if helpful. Output only the improved prompt without extra commentary.`
+      const instruction = `You are a prompt enhancer. Rewrite the user's prompt to be clear, specific, and goal-oriented; preserve intent, add necessary constraints (format, tone, audience). Output only the improved prompt without extra commentary.`
       const composed = `${instruction}\n\nUser prompt:\n${raw.trim()}`
 
       const res = await fetch(chatUrl('/chat'), {
@@ -912,84 +915,108 @@ function App() {
   }
 
   // Map roles to recommended models and preferred versions
-  const ROLE_RECOMMENDATIONS: Record<string, { ids: string[]; versions?: Partial<{ [k: string]: string }> }> = {
-    // Finance: GPT-4.1 + Gemini 1.5 Pro + Cohere (Command R or FinGPT)
-    Finance: {
-      ids: ['chatgpt', 'gemini', 'cohere'],
-      versions: {
-        chatgpt: 'gpt-4-turbo',
-        gemini: 'gemini-1.5-pro',
-        cohere: 'command-r',
-      }
-    },
-    // Marketing (Creative + Persuasive): Claude + GPT-4.1 + Gemini 1.5 Pro
-    Marketing: {
-      ids: ['claude', 'chatgpt', 'gemini'],
-      versions: {
-        chatgpt: 'gpt-4o',
-        gemini: 'gemini-1.5-pro',
-      }
-    },
-    // Coding: GPT-4.1 + Claude + Llama-3 fine-tuned (map to Meta Llama-3.x)
-    Coding: {
-      ids: ['chatgpt', 'claude', 'meta'],
-      versions: {
-        chatgpt: 'gpt-4o',
-        meta: 'llama-3.3-70b-versatile',
-      }
-    },
-    // Learning: Claude + GPT-4.1 + Gemini 1.5 Pro + Notebook LLM (Notebook LLM not in catalog)
-    Learning: {
-      ids: ['claude', 'chatgpt', 'gemini'],
-      versions: {
-        chatgpt: 'gpt-4o',
-        gemini: 'gemini-1.5-pro',
-      }
-    },
-    // Coder (existing label in sidebar) maps to Coding
-    Coder: {
-      ids: ['chatgpt', 'claude', 'meta'],
-      versions: {
-        chatgpt: 'gpt-4o',
-        meta: 'llama-3.3-70b-versatile',
-      }
-    },
+  type RoleCandidate = { modelId: string; versionPrefs?: string[] }
+  const ROLE_FALLBACKS: Record<string, RoleCandidate[]> = {
+    // User-specified chains:
+    // Finance: GPT-5 → Claude Opus 4.1 → Claude Sonnet 4.5
+    Finance: [
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      // Both Opus/Sonnet map to provider 'claude'; prefer our best available
+      { modelId: 'claude', versionPrefs: ['claude-3-opus', 'claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+    ],
+    // Coding: Claude Sonnet 4.5 → GPT-5 → o4-mini (map o4-mini to gpt-4o family)
+    Coding: [
+      { modelId: 'claude', versionPrefs: ['claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      // Also consider Meta Llama as a strong coding option in our catalog
+      { modelId: 'meta', versionPrefs: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
+    ],
+    // Legal: GPT-5 → Claude Opus 4.1 → o3 (map o3 to OpenAI best available 4o)
+    Legal: [
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      { modelId: 'claude', versionPrefs: ['claude-3-opus', 'claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+    ],
+    // Doctor: MedGemma 27B → GPT-5 → MedGemma 4B (MedGemma not present, will fallback to GPT if available)
+    Doctor: [
+      // No MedGemma provider in catalog — skip to GPT-5
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      // As an additional strong general option, consider Gemini
+      { modelId: 'gemini', versionPrefs: ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash'] },
+    ],
+    // Marketing: GPT-5 → GPT-4o → Claude Sonnet 4.5
+    Marketing: [
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      { modelId: 'claude', versionPrefs: ['claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+    ],
+    // Learning: prefer a balanced trio
+    Learning: [
+      { modelId: 'claude', versionPrefs: ['claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+      { modelId: 'chatgpt', versionPrefs: ['gpt-4o', 'gpt-5', 'gpt-4-turbo'] },
+      { modelId: 'gemini', versionPrefs: ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.0-flash'] },
+    ],
+    // Keep existing alias role for users who pick "Coder" in the sidebar
+    Coder: [
+      { modelId: 'claude', versionPrefs: ['claude-3-5-sonnet', 'claude-3-haiku-20240307'] },
+      { modelId: 'chatgpt', versionPrefs: ['gpt-5', 'gpt-4o', 'gpt-4-turbo'] },
+      { modelId: 'meta', versionPrefs: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
+    ],
+    // General: keep current selection as-is (no-op)
+    General: [],
   }
+
+  // Resolve role fallbacks against our catalog and plan
+  const resolveRoleConfig = useCallback((role: string) => {
+    const candidates = ROLE_FALLBACKS[role] || []
+    const ids: string[] = []
+    const versions: Partial<{ [k: string]: string }> = {}
+    const modelIndex = new Map(MODELS.map(m => [m.id, m]))
+
+    for (const c of candidates) {
+      const m = modelIndex.get(c.modelId)
+      if (!m) continue
+      // Respect plan locks
+      if (plan === 'basic' && BASIC_LOCKED.has(m.id)) continue
+      // Avoid duplicates while preserving order
+      if (ids.includes(m.id)) continue
+      ids.push(m.id)
+      // Pick the first preferred version that exists in our catalog
+      if (Array.isArray(m.versions) && m.versions.length > 0) {
+        const pref = (c.versionPrefs || [])
+        const found = pref.find(v => m.versions.includes(v))
+        if (found) versions[m.id] = found
+      }
+    }
+
+    return { ids, versions }
+  }, [BASIC_LOCKED, MODELS, plan])
 
   // Apply role: show popup and enable only recommended models (respect plan locks)
   const handleRoleChange = useCallback((role: string) => {
     setActiveRole(role)
 
-    const rec = ROLE_RECOMMENDATIONS[role]
-    if (!rec) return
+    const resolved = resolveRoleConfig(role)
+    if (!resolved) return
 
-    // Prepare overlay up to 5 seconds — show ALL recommended logos (even if some are premium-locked)
-    const overlayIds: string[] = rec.ids.filter(id => !!MODELS.find(m => m.id === id))
+    // Show overlay with whatever providers were requested for that role (even if some are locked/unavailable)
+    const overlayIds: string[] = (ROLE_FALLBACKS[role] || []).map(c => c.modelId).filter(id => !!MODELS.find(m => m.id === id))
     setRoleOverlay({ role, ids: overlayIds })
     window.setTimeout(() => setRoleOverlay(null), 5000)
 
-    // Build enabled map: only recommended models true, others false
+    // Enable exactly the resolved ids; disable others
     const nextEnabled: { [key: string]: boolean } = {}
     MODELS.forEach(m => { nextEnabled[m.id] = false })
-    rec.ids.forEach(id => {
-      // Respect plan locks: do not enable premium-locked models on basic plan
-      if (plan === 'basic' && BASIC_LOCKED.has(id)) return
-      if (MODELS.find(m => m.id === id)) nextEnabled[id] = true
-    })
+    resolved.ids.forEach(id => { nextEnabled[id] = true })
     setEnabledModels(nextEnabled)
 
-    // Optionally adjust preferred versions if present and valid in catalog
+    // Apply selected versions where suggested (filter out undefined to satisfy typing)
     setSelectedVersions(prev => {
-      const updated = { ...prev }
-      Object.entries(rec.versions || {}).forEach(([id, ver]) => {
-        const model = MODELS.find(m => m.id === id)
-        if (model && Array.isArray(model.versions) && ver && model.versions.includes(ver as string)) {
-          updated[id] = ver as string
-        }
+      const next = { ...prev }
+      Object.entries(resolved.versions || {}).forEach(([k, v]) => {
+        if (typeof v === 'string') next[k] = v
       })
-      return updated
+      return next
     })
-  }, [BASIC_LOCKED, MODELS, plan])
+  }, [MODELS, resolveRoleConfig])
 
   return (
     <div className="flex h-screen bg-gray-900">
@@ -1038,7 +1065,13 @@ function App() {
           modelMessages={currentModelMessages}
           isLoading={currentLoading}
           selectedVersions={selectedVersions}
-          onVersionChange={(modelId, version) => setSelectedVersions(prev => ({ ...prev, [modelId]: version }))}
+          onVersionChange={(modelId, version) => {
+            // Prevent basic users from selecting deepseek-chat or deepseek-reasoner
+            if (plan === 'basic' && modelId === 'deepseek' && ['deepseek-chat','deepseek-reasoner'].includes(version)) {
+              return
+            }
+            setSelectedVersions(prev => ({ ...prev, [modelId]: version }))
+          }}
           enabledModels={enabledModels}
           onToggleModel={setEnabledModels}
           plan={plan}
