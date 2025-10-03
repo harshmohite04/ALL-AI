@@ -11,7 +11,7 @@ import Meta from './assets/logos/meta.jpg'
 import Groq from './assets/logos/groq.png'
 import Grok from './assets/logos/grok.svg'
 import Claude from './assets/logos/claude.png'
-import Perplexity from './assets/logos/perplexity.jpg'
+import Perplexity from './assets/logos/claude.png'
 import Cohere from './assets/logos/cohere.png'
 import Deepseek from './assets/logos/deepseek.png'
 import Mistral from './assets/logos/mistral.png'
@@ -163,10 +163,10 @@ function App() {
   // Compute user-facing model catalog based on plan (no plan-based overrides for ChatGPT)
   const DISPLAY_MODELS = MODELS
 
-  const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({
+  const DEFAULT_ENABLED: { [key: string]: boolean } = {
     chatgpt: false,
     gemini: true,
-    deepseek: true,
+    deepseek: false,
     groq: true,
     grok: false,
     claude: false,
@@ -174,8 +174,10 @@ function App() {
     cohere: false,
     meta: true,
     mistral: false,
-    alibaba: false
-  })
+    alibaba: false,
+  }
+
+  const [enabledModels, setEnabledModels] = useState<{[key: string]: boolean}>({ ...DEFAULT_ENABLED })
 
   const [selectedVersions, setSelectedVersions] = useState<{[key: string]: string}>({
     // Single ChatGPT across plans
@@ -297,8 +299,8 @@ function App() {
     return convs
   }
 
-  // Helper: fetch session history and populate sessionModelMessages for that session
-  const fetchHistory = async (sessionId: string) => {
+  // Helper: fetch session history and populate sessionModelMessages for that session; returns per-model messages
+  const fetchHistory = async (sessionId: string): Promise<ModelMessages> => {
     const res = await fetch(chatUrl(`/history/${sessionId}`), { headers: { accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
@@ -322,11 +324,11 @@ function App() {
       anthropic_messages: 'Anthropic',
     }
 
-    // Initialize empty per-model messages and only take the first history step (index 0)
+    // Initialize empty per-model messages and include the entire history
     const perModel: ModelMessages = {}
     let idx = 0
     const baseTime = Date.now()
-    const turns = history.length > 0 ? [history[0]] : []
+    const turns = history
     turns.forEach((turn: any, turnIndex: number) => {
       Object.keys(keyToProvider).forEach(k => {
         const provider = keyToProvider[k]
@@ -352,28 +354,30 @@ function App() {
 
     setSessionModelMessages(prev => ({ ...prev, [sessionId]: perModel }))
     setSessionLoading(prev => ({ ...prev, [sessionId]: {} }))
-
-    // Auto-set enabled models to exactly those that appear in this session's history
-    if (Object.keys(perModel).length > 0) {
-      setEnabledModels(buildEnabledFromMessages(perModel))
-    }
+    return perModel
   }
 
-  // On mount, load sessions and pick the most recent; if none, create one
+  // On mount, load sessions and restore the last active conversation (no auto-create)
   useEffect(() => {
     const init = async () => {
       try {
         if (!accountId) return
         const convs = await fetchSessions()
-        if (convs.length === 0) {
-          const sessionId = await createSession('New Chat')
-          const conv: Conversation = { id: sessionId, title: 'New Chat', timestamp: new Date() }
-          setConversations([conv])
-          setActiveConversationId(sessionId)
-        } else {
-          setConversations(convs)
+        setConversations(convs)
+        // Try to restore the last active conversation from localStorage
+        let targetId = ''
+        try {
+          targetId = localStorage.getItem('activeConversationId') || ''
+        } catch {}
+        if (targetId && convs.some(c => c.id === targetId)) {
+          setActiveConversationId(targetId)
+          await fetchHistory(targetId)
+        } else if (convs.length > 0) {
           setActiveConversationId(convs[0].id)
           await fetchHistory(convs[0].id)
+        } else {
+          // No sessions yet; do not auto-create. Wait until the user sends a message or explicitly creates a chat.
+          setActiveConversationId('')
         }
       } catch (e) {
         console.error('Initialization failed', e)
@@ -382,6 +386,52 @@ function App() {
     void init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId])
+
+  // Persist last active conversation locally so refresh restores it
+  useEffect(() => {
+    try {
+      if (activeConversationId) localStorage.setItem('activeConversationId', activeConversationId)
+    } catch {}
+  }, [activeConversationId])
+
+  // When active conversation changes, try restoring toggles and versions immediately (before history fetch completes)
+  useEffect(() => {
+    if (!activeConversationId) return
+    try {
+      const saved = localStorage.getItem(`enabledModels:${activeConversationId}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === 'object') {
+          setEnabledModels(parsed)
+        }
+      }
+      const savedVersions = localStorage.getItem(`selectedVersions:${activeConversationId}`)
+      if (savedVersions) {
+        const parsedV = JSON.parse(savedVersions)
+        if (parsedV && typeof parsedV === 'object') {
+          setSelectedVersions((prev) => ({ ...prev, ...parsedV }))
+        }
+      }
+    } catch {}
+  }, [activeConversationId])
+
+  // Persist enabled models per session
+  useEffect(() => {
+    try {
+      if (activeConversationId) {
+        localStorage.setItem(`enabledModels:${activeConversationId}`, JSON.stringify(enabledModels))
+      }
+    } catch {}
+  }, [enabledModels, activeConversationId])
+
+  // Persist selected versions per session
+  useEffect(() => {
+    try {
+      if (activeConversationId) {
+        localStorage.setItem(`selectedVersions:${activeConversationId}`, JSON.stringify(selectedVersions))
+      }
+    } catch {}
+  }, [selectedVersions, activeConversationId])
 
   // Messages and loading state are tracked per session (conversation) and per model
   const [sessionModelMessages, setSessionModelMessages] = useState<{ [sessionId: string]: ModelMessages }>({})
@@ -442,6 +492,9 @@ function App() {
       }
       setConversations(prev => [newConv, ...prev])
       setActiveConversationId(newId)
+      // Apply default enabled models for a fresh chat and persist
+      setEnabledModels({ ...DEFAULT_ENABLED })
+      try { localStorage.setItem(`enabledModels:${newId}`, JSON.stringify(DEFAULT_ENABLED)) } catch {}
     } catch (e) {
       console.error('Failed to create new session', e)
     }
@@ -456,14 +509,32 @@ function App() {
     }
     const timestamp = new Date()
 
+    // Ensure we have a session; lazily create if none is active
+    let sessionIdToUse = activeConversationId
+    if (!sessionIdToUse) {
+      try {
+        const newId = await createSession('New Chat')
+        const newConv: Conversation = { id: newId, title: 'New Chat', timestamp: new Date() }
+        setConversations(prev => [newConv, ...prev])
+        setActiveConversationId(newId)
+        sessionIdToUse = newId
+        // Default enabled models for a fresh chat and persist
+        setEnabledModels({ ...DEFAULT_ENABLED })
+        try { localStorage.setItem(`enabledModels:${newId}`, JSON.stringify(DEFAULT_ENABLED)) } catch {}
+      } catch (e) {
+        console.error('Failed to lazily create session', e)
+        return
+      }
+    }
+
     // If this is the first message in a new conversation, generate a title
-    const isNewConversation = !sessionModelMessages[activeSessionId] || 
-      Object.values(sessionModelMessages[activeSessionId] || {}).every(msgs => msgs.length === 0);
+    const isNewConversation = !sessionModelMessages[sessionIdToUse] || 
+      Object.values(sessionModelMessages[sessionIdToUse] || {}).every(msgs => msgs.length === 0);
     
     if (isNewConversation && token) {
       try {
         // Get all messages for the current conversation
-        const allMessages = Object.values(sessionModelMessages[activeSessionId] || {})
+        const allMessages = Object.values(sessionModelMessages[sessionIdToUse] || {})
           .flat()
           .map(msg => ({
             role: msg.role,
@@ -479,13 +550,13 @@ function App() {
         // Generate title using LLM
         const title = await generateTitleFromMessages(allMessages, token);
         if (title && title !== 'New Chat') {
-          await updateConversationTitle(activeSessionId, title);
+          await updateConversationTitle(sessionIdToUse, title);
         }
       } catch (error) {
         console.error('Error generating title with LLM, using fallback:', error);
         const fallbackTitle = await generateTitleFromMessage(content);
         if (fallbackTitle && fallbackTitle !== 'New Chat') {
-          await updateConversationTitle(activeSessionId, fallbackTitle);
+          await updateConversationTitle(sessionIdToUse, fallbackTitle);
         }
       }
     }
@@ -499,14 +570,14 @@ function App() {
 
     // Append user message to all enabled model threads
     setSessionModelMessages(prev => {
-      const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+      const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
       Object.keys(enabledModels).forEach(modelId => {
         if (enabledModels[modelId]) {
           const id = `${userMessage.id}-${modelId}`
           sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), { ...userMessage, id }]
         }
       })
-      return { ...prev, [activeSessionId]: sessionMsgs }
+      return { ...prev, [sessionIdToUse]: sessionMsgs }
     })
 
     // Set loading only for enabled models
@@ -514,7 +585,7 @@ function App() {
     Object.keys(enabledModels).forEach(modelId => {
       if (enabledModels[modelId]) loadingState[modelId] = true
     })
-    setSessionLoading(prev => ({ ...prev, [activeSessionId]: loadingState }))
+    setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: loadingState }))
 
     // If role is Image/Video Generation and feature is enabled, route accordingly
     const isImageGenFlow = activeRole === 'Image Generation' && imageGenEnabled
@@ -533,7 +604,7 @@ function App() {
           body: JSON.stringify({
             prompt: content,
             provider: isImageGenFlow ? imageProvider : videoProvider,
-            session_id: activeSessionId,
+            session_id: sessionIdToUse,
             client_time: toLocalIsoWithOffset(timestamp),
           })
         })
@@ -561,9 +632,9 @@ function App() {
             animate: true,
           }
           setSessionModelMessages(prev => {
-            const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+            const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
             sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
-            return { ...prev, [activeSessionId]: sessionMsgs }
+            return { ...prev, [sessionIdToUse]: sessionMsgs }
           })
         })
       } catch (err: any) {
@@ -579,14 +650,14 @@ function App() {
             animate: true,
           }
           setSessionModelMessages(prev => {
-            const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+            const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
             sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
-            return { ...prev, [activeSessionId]: sessionMsgs }
+            return { ...prev, [sessionIdToUse]: sessionMsgs }
           })
         })
       } finally {
         // Clear loading for all enabled models
-        setSessionLoading(prev => ({ ...prev, [activeSessionId]: Object.fromEntries(Object.keys(enabledModels).map(id => [id, false])) }))
+        setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: Object.fromEntries(Object.keys(enabledModels).map(id => [id, false])) }))
       }
       return
     }
@@ -620,7 +691,7 @@ function App() {
         body: JSON.stringify({
           user_query: content,
           selected_models,
-          session_id: activeSessionId,
+          session_id: sessionIdToUse,
           client_time: toLocalIsoWithOffset(timestamp),
         })
       })
@@ -660,12 +731,12 @@ function App() {
           animate: true,
         }
         setSessionModelMessages(prev => {
-          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
           sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
-          return { ...prev, [activeSessionId]: sessionMsgs }
+          return { ...prev, [sessionIdToUse]: sessionMsgs }
         })
         processed[modelId] = true
-        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
+        setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: { ...(prev[sessionIdToUse] || {}), [modelId]: false } }))
       })
 
       // For any enabled model that didn't receive a response, stop loading and show a generic message
@@ -674,7 +745,7 @@ function App() {
         if (processed[modelId]) return
         if (!providerMap[modelId]) {
           // Not supported by backend; stop loading silently
-          setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
+          setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: { ...(prev[sessionIdToUse] || {}), [modelId]: false } }))
           return
         }
         const assistantMessage: Message = {
@@ -686,18 +757,18 @@ function App() {
           animate: true,
         }
         setSessionModelMessages(prev => {
-          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
           sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
-          return { ...prev, [activeSessionId]: sessionMsgs }
+          return { ...prev, [sessionIdToUse]: sessionMsgs }
         })
-        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
+        setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: { ...(prev[sessionIdToUse] || {}), [modelId]: false } }))
       })
     } catch (err: any) {
       // On error, append error message to all enabled and supported models
       Object.keys(enabledModels).forEach(modelId => {
         if (!enabledModels[modelId]) return
         if (!providerMap[modelId]) {
-          setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
+          setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: { ...(prev[sessionIdToUse] || {}), [modelId]: false } }))
           return
         }
         const assistantMessage: Message = {
@@ -709,50 +780,36 @@ function App() {
           animate: true,
         }
         setSessionModelMessages(prev => {
-          const sessionMsgs = { ...(prev[activeSessionId] || {}) }
+          const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
           sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
-          return { ...prev, [activeSessionId]: sessionMsgs }
+          return { ...prev, [sessionIdToUse]: sessionMsgs }
         })
-        setSessionLoading(prev => ({ ...prev, [activeSessionId]: { ...(prev[activeSessionId] || {}), [modelId]: false } }))
+        setSessionLoading(prev => ({ ...prev, [sessionIdToUse]: { ...(prev[sessionIdToUse] || {}), [modelId]: false } }))
       })
     }
   }
 
-  // Enhance a prompt using ChatGPT OSS only (OpenAI OSS model via backend /chat)
+  // Enhance a prompt via our Node backend endpoint instead of /chat
   const handleEnhancePrompt = useCallback(async (raw: string): Promise<string> => {
     try {
-      const timestamp = new Date()
-      const openaiModel = MODELS.find(m => m.id === 'chatgpt')
-      const version = selectedVersions['chatgpt'] || 'openai/gpt-oss-20b'
-      if (!openaiModel) return raw
-
-      const selected_models: { [key: string]: string } = { OpenAI: version }
-      const instruction = `You are a prompt enhancer. Rewrite the user's prompt to be clear, specific, and goal-oriented; preserve intent, add necessary constraints (format, tone, audience). Output only the improved prompt without extra commentary.`
-      const composed = `${instruction}\n\nUser prompt:\n${raw.trim()}`
-
-      const res = await fetch(chatUrl('/chat'), {
+      const res = await fetch('/api/enhance', {
         method: 'POST',
         headers: {
           'accept': 'application/json',
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          user_query: composed,
-          selected_models,
-          session_id: activeSessionId,
-          client_time: toLocalIsoWithOffset(timestamp),
-        })
+        body: JSON.stringify({ prompt: raw })
       })
       if (!res.ok) throw new Error(await res.text())
-      const data = await res.json().catch(() => ({}))
-      const text = (data?.responses?.OpenAI ?? data?.OpenAI ?? '').toString()
-      return (text || '').trim() || raw
+      const data = await res.json().catch(() => ({} as any))
+      const improved = (data?.improved || '').toString().trim()
+      return improved || raw
     } catch (e) {
       console.error('Enhance failed', e)
       return raw
     }
-  }, [activeSessionId, selectedVersions, token])
+  }, [token])
 
   const enabledModelsList = DISPLAY_MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
@@ -770,17 +827,26 @@ function App() {
     // Load history if we don't yet have messages for this session
     if (!sessionModelMessages[id]) {
       try {
-        await fetchHistory(id)
+        const perModel = await fetchHistory(id)
+        // Show all models that appear in this session's history
+        setEnabledModels(buildEnabledFromMessages(perModel))
       } catch (e) {
         console.error('Failed to fetch history for session', id, e)
       }
-    }
-    else {
-      // If messages already exist, set enabled models from that history
+    } else {
+      // We already have messages; show all models that have history in this session
       const perModel = sessionModelMessages[id]
-      if (perModel && Object.keys(perModel).length > 0) {
-        setEnabledModels(buildEnabledFromMessages(perModel))
-      }
+      setEnabledModels(buildEnabledFromMessages(perModel))
+      // Keep versions restoration behavior if available
+      try {
+        const savedVersions = localStorage.getItem(`selectedVersions:${id}`)
+        if (savedVersions) {
+          const parsedV = JSON.parse(savedVersions)
+          if (parsedV && typeof parsedV === 'object') {
+            setSelectedVersions((prev) => ({ ...prev, ...parsedV }))
+          }
+        }
+      } catch {}
     }
   }
 
