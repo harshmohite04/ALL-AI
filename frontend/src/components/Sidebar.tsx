@@ -258,7 +258,6 @@ export default function Sidebar({ models, enabledModels, onToggleModel, selected
             Role
           </button>
         </div>
-        <div className="mt-3 text-[10px] text-gray-400">{enabledCount} active model{enabledCount !== 1 ? 's' : ''}</div>
       </div>
 
       {/* Dynamic List Area */}

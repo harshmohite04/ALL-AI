@@ -1,6 +1,8 @@
 import AppleSelect from './AppleSelect'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
+import 'highlight.js/styles/github-dark.css'
 import { useEffect, useRef, useState } from 'react'
 import type React from 'react'
 
@@ -33,9 +35,11 @@ interface MultiModelChatProps {
   enabledModels: {[key: string]: boolean}
   onToggleModel: (models: {[key: string]: boolean}) => void
   plan?: 'basic' | 'premium'
+  sessionTitle: string
+  enabledCount: number
 }
 
-export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel, plan = 'basic' }: MultiModelChatProps) {
+export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel, plan = 'basic', sessionTitle, enabledCount }: MultiModelChatProps) {
   // Default column width in pixels (Tailwind w-96 = 384px)
   const DEFAULT_WIDTH = 384
   const MIN_WIDTH = 260
@@ -91,7 +95,74 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
   // Persist streaming progress per message to avoid restarts on re-render
   const streamProgressRef = useRef<Record<string, number>>({})
   const completedRef = useRef<Record<string, boolean>>({})
-  const [completedTick, setCompletedTick] = useState(0) // force re-render when a message completes
+
+  // Reader/Font controls
+  const [fontScale, setFontScale] = useState<number>(1)
+  const [readerMode, setReaderMode] = useState<boolean>(false)
+
+  const clamp = (n: number, min = 0.85, max = 1.4) => Math.max(min, Math.min(max, n))
+
+  // Build shared Markdown components (self-contained, includes its own copy logic)
+  const mdComponents = {
+    p({ children }: any) {
+      return <p className={`mb-3 ${readerMode ? 'leading-8' : 'leading-7'} text-gray-200`}>{children}</p>
+    },
+    h1({ children }: any) { return <h1 className="mt-4 mb-2 text-xl font-semibold text-white">{children}</h1> },
+    h2({ children }: any) { return <h2 className="mt-4 mb-2 text-lg font-semibold text-white">{children}</h2> },
+    h3({ children }: any) { return <h3 className="mt-3 mb-2 text-base font-semibold text-white">{children}</h3> },
+    ul({ children }: any) { return <ul className="list-disc ml-5 my-3 space-y-1 text-gray-200">{children}</ul> },
+    ol({ children }: any) { return <ol className="list-decimal ml-5 my-3 space-y-1 text-gray-200">{children}</ol> },
+    li({ children }: any) { return <li className="marker:text-gray-400">{children}</li> },
+    blockquote({ children }: any) { return <blockquote className="border-l-4 border-gray-600 pl-3 my-3 text-gray-300 italic">{children}</blockquote> },
+    hr() { return <hr className="my-4 border-gray-700" /> },
+    code({ inline, className, children, ...props }: any) {
+      if (!inline) {
+        const codeText = String(children ?? '')
+        const copyCode = async () => {
+          try {
+            await navigator.clipboard.writeText(codeText)
+          } catch {
+            const ta = document.createElement('textarea')
+            ta.value = codeText
+            ta.style.position = 'fixed'
+            ta.style.opacity = '0'
+            document.body.appendChild(ta)
+            ta.select()
+            try { document.execCommand('copy') } catch {}
+            document.body.removeChild(ta)
+          }
+        }
+        return (
+          <div className="my-2 overflow-x-auto relative group">
+            <button
+              onClick={copyCode}
+              className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 text-[11px] px-2 py-1 rounded bg-gray-700 text-gray-200 hover:bg-gray-600"
+              title="Copy code"
+            >Copy</button>
+            <pre className="bg-gray-800 text-gray-200 rounded-lg p-4 whitespace-pre min-w-full">
+              <code className={`${className ?? ''}`} {...props}>{children}</code>
+            </pre>
+          </div>
+        )
+      }
+      return (
+        <code className="bg-gray-800/80 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+      )
+    },
+    img({ src, alt, ...props }: any) { return <img src={src as string} alt={alt as string} className="max-w-full h-auto rounded" {...props} /> },
+    a({ children, ...props }: any) { return <a {...props} className="break-all text-blue-400 underline">{children}</a> },
+    table({ children }: any) {
+      return (
+        <div className="w-full overflow-x-auto my-3">
+          <table className="min-w-full table-auto border border-gray-700 text-sm">{children}</table>
+        </div>
+      )
+    },
+    thead({ children }: any) { return <thead className="bg-gray-800">{children}</thead> },
+    th({ children }: any) { return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold">{children}</th> },
+    td({ children }: any) { return <td className="border border-gray-700 px-3 py-2 align-top">{children}</td> },
+  } as const
+
 
   const TypewriterMarkdown: React.FC<{ id: string; text: string; onTick?: () => void; onDone?: () => void; speed?: number }> = ({ id, text, onTick, onDone, speed = 18 }) => {
     const [len, setLen] = useState<number>(() => streamProgressRef.current[id] ?? 0)
@@ -115,7 +186,6 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
           if (next >= text.length) {
             completedRef.current[id] = true
             onDone?.()
-            setCompletedTick((t) => t + 1)
             return next
           }
           return next
@@ -128,7 +198,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
       // Only restart if text actually changes or id changes
     }, [id, text, speed, onTick, onDone])
     return (
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents as any}>
         {text.slice(0, len)}
       </ReactMarkdown>
     )
@@ -175,19 +245,6 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 1500)
     }
-  }
-  const getModelColor = (color: string) => {
-    const colors = {
-      green: 'bg-green-500',
-      blue: 'bg-blue-500',
-      purple: 'bg-purple-500',
-      indigo: 'bg-indigo-500',
-      red: 'bg-red-500',
-      orange: 'bg-orange-500',
-      teal: 'bg-teal-500',
-      pink: 'bg-pink-500'
-    }
-    return colors[color as keyof typeof colors] || 'bg-gray-500'
   }
 
   // Resolve logo URLs from assets; fallback to emoji when not found
@@ -260,6 +317,37 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
   return (
     <div className="flex-1 overflow-hidden bg-gray-900 h-full">
+      {/* Session header */}
+      <div className="sticky top-0 z-20 bg-gray-900 border-b border-gray-800">
+        <div className="px-4 pt-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-white font-semibold text-base truncate" title={sessionTitle}>{sessionTitle}</div>
+            <div className="text-xs text-gray-400 pb-2">{enabledCount} models active</div>
+          </div>
+          {/* Reader/Font controls */}
+          <div className="pb-2 flex items-center gap-2 text-gray-300">
+            <button
+              className="px-2 py-1 text-xs rounded bg-gray-800 hover:bg-gray-700"
+              onClick={() => setFontScale(s => clamp(s - 0.1))}
+              title="Decrease font size"
+              aria-label="Decrease font size"
+            >A−</button>
+            <button
+              className="px-2 py-1 text-xs rounded bg-gray-800 hover:bg-gray-700"
+              onClick={() => setFontScale(s => clamp(s + 0.1))}
+              title="Increase font size"
+              aria-label="Increase font size"
+            >A+</button>
+            <button
+              className={`px-2 py-1 text-xs rounded ${readerMode ? 'bg-blue-600 text-white' : 'bg-gray-800 hover:bg-gray-700'}`}
+              onClick={() => setReaderMode(v => !v)}
+              title="Toggle reader mode"
+              aria-pressed={readerMode}
+              aria-label="Toggle reader mode"
+            >Reader</button>
+          </div>
+        </div>
+      </div>
       {/* Top horizontal scrollbar (only when columns are resizable) */}
       {!equalMode && (
         <div className="sticky top-0 z-10 bg-gray-900">
@@ -276,7 +364,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
       <div
         ref={hScrollRef}
         onScroll={equalMode ? undefined : onMainScroll}
-        className={`h-full flex ${equalMode ? 'overflow-x-hidden' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}
+        className={`h-full flex ${equalMode ? 'overflow-x-auto' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}
       >
         {models.map((model) => (
           <div
@@ -329,7 +417,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             {/* Chat Area */}
             <div
               ref={(el) => { listRefs.current[model.id] = el; }}
-              className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-900 min-h-0 overscroll-contain"
+              className="flex-1 overflow-y-auto overflow-x-auto p-4 bg-gray-900 min-h-0 overscroll-contain"
               style={{ paddingBottom: 'var(--input-height, 160px)' }}
             >
               <div className="space-y-4">
@@ -343,49 +431,11 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           </svg>
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm text-white bg-gray-800 rounded-lg p-3 break-words">
+                          <div className="text-sm text-white bg-gray-800 rounded-lg p-3" style={{ fontSize: `${clamp(fontScale)}rem` }}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
-                              components={{
-                                code({ inline, className, children, ...props }: any) {
-                                  if (!inline) {
-                                    return (
-                                      <pre className="bg-gray-800 text-gray-200 rounded-lg p-4 overflow-x-hidden whitespace-pre-wrap break-words my-2">
-                                        <code className={`${className ?? ''} whitespace-pre-wrap break-words`} {...props}>{children}</code>
-                                      </pre>
-                                    )
-                                  }
-                                  return (
-                                    <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded break-words" {...props}>{children}</code>
-                                  )
-                                },
-                                img({ src, alt, ...props }: any) {
-                                  return (
-                                    <img src={src as string} alt={alt as string} className="max-w-full h-auto rounded" {...props} />
-                                  )
-                                },
-                                a({ children, ...props }: any) {
-                                  return (
-                                    <a {...props} className="break-all text-blue-400 underline">{children}</a>
-                                  )
-                                },
-                                table({ children }: any) {
-                                  return (
-                                    <div className="w-full overflow-x-hidden my-3">
-                                      <table className="min-w-full table-fixed border border-gray-700 text-sm break-words">{children}</table>
-                                    </div>
-                                  )
-                                },
-                                thead({ children }: any) {
-                                  return <thead className="bg-gray-800">{children}</thead>
-                                },
-                                th({ children }: any) {
-                                  return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold break-words">{children}</th>
-                                },
-                                td({ children }: any) {
-                                  return <td className="border border-gray-700 px-3 py-2 align-top break-words">{children}</td>
-                                }
-                              }}
+                              rehypePlugins={[rehypeHighlight]}
+                              components={mdComponents as any}
                             >
                               {message.content}
                             </ReactMarkdown>
@@ -410,7 +460,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           </div>
                         )}
                         <div className="flex-1">
-                          <div className="text-sm text-gray-300 leading-relaxed break-words">
+                          <div className="text-sm text-gray-300 leading-relaxed" style={{ fontSize: `${clamp(fontScale)}rem` }}>
                             {(idx === arr.length - 1 && message.animate) ? (
                               <TypewriterMarkdown
                                 // Animate sanitized text without <think>
@@ -419,36 +469,8 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                             ) : (
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
-                                components={{
-                                  code({ inline, className, children, ...props }: any) {
-                                    if (!inline) {
-                                      return (
-                                        <pre className="bg-gray-800 text-gray-200 rounded-lg p-4 overflow-x-hidden whitespace-pre-wrap break-words my-2">
-                                          <code className={`${className ?? ''} whitespace-pre-wrap break-words`} {...props}>{children}</code>
-                                        </pre>
-                                      )
-                                    }
-                                    return (
-                                      <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded break-words" {...props}>{children}</code>
-                                    )
-                                  },
-                                  table({ children }: any) {
-                                    return (
-                                      <div className="w-full overflow-x-hidden my-3">
-                                        <table className="min-w-full table-fixed border border-gray-700 text-sm break-words">{children}</table>
-                                      </div>
-                                    )
-                                  },
-                                  thead({ children }: any) {
-                                    return <thead className="bg-gray-800">{children}</thead>
-                                  },
-                                  th({ children }: any) {
-                                    return <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left font-semibold break-words">{children}</th>
-                                  },
-                                  td({ children }: any) {
-                                    return <td className="border border-gray-700 px-3 py-2 align-top break-words">{children}</td>
-                                  }
-                                }}
+                                rehypePlugins={[rehypeHighlight]}
+                                components={mdComponents as any}
                               >
                                   {parseDeepseek(message.content).visible}
                                 </ReactMarkdown>

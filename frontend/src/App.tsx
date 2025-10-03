@@ -324,11 +324,12 @@ function App() {
       anthropic_messages: 'Anthropic',
     }
 
-    // Initialize empty per-model messages and include the entire history
+    // Initialize empty per-model messages and include ONLY the latest history step
     const perModel: ModelMessages = {}
     let idx = 0
     const baseTime = Date.now()
-    const turns = history
+    // Use only the last turn (latest index) to render recent messages
+    const turns = history.length ? [history[0]] : []
     turns.forEach((turn: any, turnIndex: number) => {
       Object.keys(keyToProvider).forEach(k => {
         const provider = keyToProvider[k]
@@ -814,6 +815,7 @@ function App() {
   const enabledModelsList = DISPLAY_MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
   const isAnyLoading = Object.values(currentLoading).some(Boolean)
+  const sessionTitle = conversations.find(c => c.id === activeConversationId)?.title || 'New Chat'
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversationId(id)
@@ -1116,7 +1118,7 @@ function App() {
         <button
           type="button"
           onClick={() => setSidebarCollapsed(false)}
-          className="fixed left-2 top-2 z-20 p-2 rounded-md bg-gray-800/90 text-white border border-gray-700 hover:bg-gray-700"
+          className="fixed left-2 top-2 z-50 p-2 rounded-md bg-gray-800/90 text-white border border-gray-700 hover:bg-gray-700 shadow-lg"
           aria-label="Open sidebar"
           title="Open sidebar"
         >
@@ -1141,6 +1143,8 @@ function App() {
           enabledModels={enabledModels}
           onToggleModel={setEnabledModels}
           plan={plan}
+          sessionTitle={sessionTitle}
+          enabledCount={enabledCount}
         />
         {/* Bottom overlay to mask page edge when horizontally scrolled (exclude sidebar area) */}
         <div className={`fixed ${sidebarCollapsed ? 'left-0' : 'left-64'} right-0 bottom-0 h-24 z-10 pointer-events-none bg-gradient-to-t from-gray-900/95 to-transparent transition-all duration-300 ease-in-out`} />
