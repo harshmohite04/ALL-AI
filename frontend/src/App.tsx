@@ -11,7 +11,7 @@ import Meta from './assets/logos/meta.jpg'
 import Groq from './assets/logos/groq.png'
 import Grok from './assets/logos/grok.svg'
 import Claude from './assets/logos/claude.png'
-import Perplexity from './assets/logos/claude.png'
+import Perplexity from './assets/logos/perplexity.jpg'
 import Cohere from './assets/logos/cohere.png'
 import Deepseek from './assets/logos/deepseek.png'
 import Mistral from './assets/logos/mistral.png'
@@ -55,6 +55,15 @@ interface ModelMessages {
   [key: string]: Message[]
 }
 
+interface PendingUpload {
+  id: string
+  name: string
+  mime: string
+  previewUrl: string
+  extractedText: string | null
+  status: 'processing' | 'ready' | 'error'
+}
+
 const MODELS = [
   { 
     id: 'chatgpt', 
@@ -90,8 +99,7 @@ const MODELS = [
     icon: Groq,
     versions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'mixtral-8x7b','llama-3.3-70b-versatile'],
     providerKey: 'Groq'
-  }
-  ,
+  },
   { 
     id: 'grok', 
     name: 'Grok', 
@@ -437,6 +445,7 @@ function App() {
   // Messages and loading state are tracked per session (conversation) and per model
   const [sessionModelMessages, setSessionModelMessages] = useState<{ [sessionId: string]: ModelMessages }>({})
   const [sessionLoading, setSessionLoading] = useState<{ [sessionId: string]: { [modelId: string]: boolean } }>({})
+  const [pendingUploads, setPendingUploads] = useState<{ [sessionId: string]: PendingUpload[] }>({})
 
   const activeSessionId = activeConversationId
   const currentModelMessages: ModelMessages = sessionModelMessages[activeSessionId] || {}
@@ -562,24 +571,42 @@ function App() {
       }
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      role: 'user',
-      timestamp
+    // Combine any pending extracted text with the user's message
+    const pendingForSession = pendingUploads[sessionIdToUse] || []
+    const extractedBundle = pendingForSession
+      .filter(u => u.status === 'ready' && (u.extractedText || '').trim().length > 0)
+      .map(u => `Attachment (${u.name}):\n${u.extractedText}`)
+      .join('\n\n')
+
+    const promptContent = content.trim()
+    const requestContent = [promptContent, extractedBundle.trim()].filter(Boolean).join('\n\n')
+
+    // If there is neither prompt nor extracted text, do nothing
+    if (!requestContent) return
+
+    // Only show the user's typed prompt in the UI (not the extracted text)
+    let userMessage: Message | null = null
+    if (promptContent) {
+      userMessage = {
+        id: Date.now().toString(),
+        content: promptContent,
+        role: 'user',
+        timestamp
+      }
+      setSessionModelMessages(prev => {
+        const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
+        Object.keys(enabledModels).forEach(modelId => {
+          if (enabledModels[modelId]) {
+            const id = `${userMessage!.id}-${modelId}`
+            sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), { ...userMessage!, id }]
+          }
+        })
+        return { ...prev, [sessionIdToUse]: sessionMsgs }
+      })
     }
 
-    // Append user message to all enabled model threads
-    setSessionModelMessages(prev => {
-      const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
-      Object.keys(enabledModels).forEach(modelId => {
-        if (enabledModels[modelId]) {
-          const id = `${userMessage.id}-${modelId}`
-          sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), { ...userMessage, id }]
-        }
-      })
-      return { ...prev, [sessionIdToUse]: sessionMsgs }
-    })
+    // Clear any processed uploads after sending
+    setPendingUploads(prev => ({ ...prev, [sessionIdToUse]: [] }))
 
     // Set loading only for enabled models
     const loadingState: {[key: string]: boolean} = {}
@@ -690,7 +717,7 @@ function App() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          user_query: content,
+          user_query: requestContent,
           selected_models,
           session_id: sessionIdToUse,
           client_time: toLocalIsoWithOffset(timestamp),
@@ -812,10 +839,148 @@ function App() {
     }
   }, [token])
 
+  // Upload + preprocess files immediately, store extracted text but never display it.
+  const handleUploadFiles = async (files: FileList) => {
+    if (!token) {
+      openAuth('signin')
+      return
+    }
+    // Ensure session exists
+    let sessionIdToUse = activeConversationId
+    if (!sessionIdToUse) {
+      try {
+        const newId = await createSession('New Chat')
+        const newConv: Conversation = { id: newId, title: 'New Chat', timestamp: new Date() }
+        setConversations(prev => [newConv, ...prev])
+        setActiveConversationId(newId)
+        sessionIdToUse = newId
+        setEnabledModels({ ...DEFAULT_ENABLED })
+        try { localStorage.setItem(`enabledModels:${newId}`, JSON.stringify(DEFAULT_ENABLED)) } catch {}
+      } catch (e) {
+        console.error('Failed to lazily create session for upload', e)
+        return
+      }
+    }
+
+    const arr = Array.from(files)
+    for (const f of arr) {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const previewUrl = URL.createObjectURL(f)
+      const mime = f.type || 'application/octet-stream'
+
+      // User-side preview message (no extracted text). Include uploading note.
+      const previewMarkdown = mime.startsWith('image/')
+        ? `Uploading ${f.name}...\n\n![](${previewUrl})`
+        : `Uploading ${f.name}... (preview not available)`
+
+      const userMsg: Message = { id, content: previewMarkdown, role: 'user', timestamp: new Date() }
+      setSessionModelMessages(prev => {
+        const sessionMsgs = { ...(prev[sessionIdToUse] || {}) }
+        Object.keys(enabledModels).forEach(modelId => {
+          if (enabledModels[modelId]) {
+            const mid = `${userMsg.id}-${modelId}`
+            sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), { ...userMsg, id: mid }]
+          }
+        })
+        return { ...prev, [sessionIdToUse]: sessionMsgs }
+      })
+
+      // Mark pending processing
+      setPendingUploads(prev => ({
+        ...prev,
+        [sessionIdToUse]: [
+          ...(prev[sessionIdToUse] || []),
+          { id, name: f.name, mime, previewUrl, extractedText: null, status: 'processing' },
+        ],
+      }))
+
+      // Preprocess via FastAPI: expects { extracted_text }
+      try {
+        const form = new FormData()
+        form.append('file', f)
+        // prompt left empty; we only want extraction now
+        const res = await fetch(chatUrl('/preprocess'), {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: form,
+        })
+        if (!res.ok) throw new Error(await res.text())
+        const data = await res.json().catch(() => ({} as any))
+        const extracted = (data?.extracted_text || '').toString()
+
+        setPendingUploads(prev => ({
+          ...prev,
+          [sessionIdToUse!]: (prev[sessionIdToUse!] || []).map(u => u.id === id ? { ...u, extractedText: extracted, status: 'ready' } : u),
+        }))
+
+        // Update the preview message to final display (remove "Uploading ...")
+        Object.keys(enabledModels).forEach(modelId => {
+          if (!enabledModels[modelId]) return
+          const mid = `${id}-${modelId}`
+          setSessionModelMessages(prev => {
+            const sessionMsgs = { ...(prev[sessionIdToUse!] || {}) }
+            const arrMsgs = [...(sessionMsgs[modelId] || [])]
+            const idx = arrMsgs.findIndex(m => m.id === mid)
+            if (idx !== -1) {
+              const finalContent = mime.startsWith('image/') ? `![](${previewUrl})` : `Uploaded: ${f.name} (preview not available)`
+              arrMsgs[idx] = { ...arrMsgs[idx], content: finalContent }
+              sessionMsgs[modelId] = arrMsgs
+            }
+            return { ...prev, [sessionIdToUse!]: sessionMsgs }
+          })
+        })
+      } catch (err: any) {
+        console.error('Preprocess failed:', err)
+        setPendingUploads(prev => ({
+          ...prev,
+          [sessionIdToUse!]: (prev[sessionIdToUse!] || []).map(u => u.id === id ? { ...u, extractedText: null, status: 'error' } : u),
+        }))
+        // Optional: system note about failure (short)
+        Object.keys(enabledModels).forEach(modelId => {
+          if (!enabledModels[modelId]) return
+          const assistantMessage: Message = {
+            id: `${Date.now()}-${modelId}`,
+            content: `Failed to preprocess ${f.name}. You can still send a prompt.`,
+            role: 'assistant',
+            timestamp: new Date(),
+            model: modelId,
+            animate: true,
+          }
+          setSessionModelMessages(prev => {
+            const sessionMsgs = { ...(prev[sessionIdToUse!] || {}) }
+            sessionMsgs[modelId] = [...(sessionMsgs[modelId] || []), assistantMessage]
+            return { ...prev, [sessionIdToUse!]: sessionMsgs }
+          })
+        })
+
+        // Even on failure, clean the preview message text to remove "Uploading ..."
+        Object.keys(enabledModels).forEach(modelId => {
+          if (!enabledModels[modelId]) return
+          const mid = `${id}-${modelId}`
+          setSessionModelMessages(prev => {
+            const sessionMsgs = { ...(prev[sessionIdToUse!] || {}) }
+            const arrMsgs = [...(sessionMsgs[modelId] || [])]
+            const idx = arrMsgs.findIndex(m => m.id === mid)
+            if (idx !== -1) {
+              const finalContent = mime.startsWith('image/') ? `![](${previewUrl})` : `Uploaded: ${f.name} (preview not available)`
+              arrMsgs[idx] = { ...arrMsgs[idx], content: finalContent }
+              sessionMsgs[modelId] = arrMsgs
+            }
+            return { ...prev, [sessionIdToUse!]: sessionMsgs }
+          })
+        })
+      }
+    }
+  }
+
   const enabledModelsList = DISPLAY_MODELS.filter(model => enabledModels[model.id])
   const enabledCount = Object.values(enabledModels).filter(Boolean).length
   const isAnyLoading = Object.values(currentLoading).some(Boolean)
   const sessionTitle = conversations.find(c => c.id === activeConversationId)?.title || 'New Chat'
+  const hasProcessingUploads = (pendingUploads[activeConversationId || ''] || []).some(u => u.status === 'processing')
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversationId(id)
@@ -1152,10 +1317,11 @@ function App() {
         <div className={`fixed ${sidebarCollapsed ? 'left-0' : 'left-64'} right-4 bottom-5 z-20 max-w-[1100px] mx-auto floating-input-safe-area transition-all duration-300 ease-in-out`}>
           <MessageInput 
             onSendMessage={handleSendMessage}
-            disabled={isAnyLoading}
+            disabled={isAnyLoading || hasProcessingUploads}
             enabledCount={enabledCount}
             variant="floating"
             onEnhancePrompt={handleEnhancePrompt}
+            onUploadFiles={handleUploadFiles}
           />
         </div>
         {/* Role recommendation overlay */}

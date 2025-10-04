@@ -6,14 +6,16 @@ interface MessageInputProps {
   enabledCount?: number
   variant?: 'default' | 'floating'
   onEnhancePrompt?: (raw: string) => Promise<string>
+  onUploadFiles?: (files: FileList) => void
 }
 
-  export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default', onEnhancePrompt }: MessageInputProps) {
+  export default function MessageInput({ onSendMessage, disabled = false, enabledCount = 0, variant = 'default', onEnhancePrompt, onUploadFiles }: MessageInputProps) {
     const [message, setMessage] = useState('')
     const [showPopup, setShowPopup] = useState(false)
     const [expanded, setExpanded] = useState(false)
     const [enhancing, setEnhancing] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+    const fileInputRef = useRef<HTMLInputElement | null>(null)
     const rootRef = useRef<HTMLDivElement | null>(null)
 
   // Keep focus on the textarea when enabled
@@ -59,6 +61,10 @@ interface MessageInputProps {
       const h = el.offsetHeight || 0
       const margin = 16 // extra padding so content never touches
       document.documentElement.style.setProperty('--input-height', `${h + margin}px`)
+      // Notify listeners (e.g., chat columns) that the input height changed
+      try {
+        document.dispatchEvent(new Event('input-height-change'))
+      } catch {}
     }
     update()
     const ro = new ResizeObserver(() => update())
@@ -90,6 +96,27 @@ interface MessageInputProps {
     console.log('Selected option:', option)
     setShowPopup(false)
     // Here you can add specific functionality for each option
+  }
+
+  // Uploads handling
+  const handleUploadClick = () => {
+    if (disabled) return
+    fileInputRef.current?.click()
+  }
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      if (onUploadFiles) {
+        onUploadFiles(files)
+      } else {
+        console.log('Files selected:', Array.from(files).map(f => `${f.name} (${f.type || 'unknown'})`))
+      }
+      // reset input to allow re-selecting the same files
+      e.target.value = ''
+      // keep focus on textarea
+      setTimeout(() => textareaRef.current?.focus(), 0)
+    }
   }
 
   const handleEnhance = async () => {
@@ -262,6 +289,35 @@ interface MessageInputProps {
             />
           </svg>
         </button>
+        {/* Uploads Button (beside Enhance) */}
+        <button
+          type="button"
+          onClick={handleUploadClick}
+          disabled={disabled}
+          className={
+            variant === 'floating'
+              ? `absolute right-28 ${expanded ? 'bottom-4' : 'top-1/2 -translate-y-1/2'} w-8 h-8 bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 hover:text-white transition-all duration-200 flex items-center justify-center`
+              : `absolute right-32 ${expanded ? 'bottom-5' : 'top-1/2 -translate-y-1/2'} w-10 h-10 bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 hover:text-gray-800 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center`
+          }
+          onMouseDown={(e) => e.preventDefault()}
+          title="Upload files"
+          aria-label="Upload files"
+        >
+          {/* Upload icon */}
+          <svg className={variant === 'floating' ? 'w-4 h-4' : 'w-5 h-5'} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M8 12l4-4m0 0l4 4m-4-4v12" />
+          </svg>
+        </button>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFilesSelected}
+          className="hidden"
+        />
+
         {/* Enhance Button (magic) */}
         <button
           type="button"
@@ -312,8 +368,9 @@ interface MessageInputProps {
             />
           </svg>
         </button>
+        
       </div>
-      
+
       {/* Removed Generate Image/Video buttons */}
 
       {variant !== 'floating' && (

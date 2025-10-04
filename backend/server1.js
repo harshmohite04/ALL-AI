@@ -28,6 +28,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
+// Note: /preprocess is handled by the FastAPI service (CHAT_BASE). Ensure VITE_CHAT_BASE_URL points to it.
+
 // Routes
 app.use('/api/auth', authRoutes)
 

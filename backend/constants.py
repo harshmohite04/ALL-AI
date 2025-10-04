@@ -18,7 +18,7 @@ def llm_ChatGoogleGenerativeAI(google_model_name):
     return ChatGoogleGenerativeAI(
     model=google_model_name,   
     temperature=0.7,
-    
+   
 )
 
 def llm_ChatGroq(groq_model_name):

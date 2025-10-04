@@ -40,36 +40,7 @@ interface MultiModelChatProps {
 }
 
 export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel, plan = 'basic', sessionTitle, enabledCount }: MultiModelChatProps) {
-  // Default column width in pixels (Tailwind w-96 = 384px)
-  const DEFAULT_WIDTH = 384
-  const MIN_WIDTH = 260
-  const MAX_WIDTH = 900
-
-  // Persist widths per model in localStorage
-  const [widths, setWidths] = useState<Record<string, number>>(() => {
-    try {
-      const raw = localStorage.getItem('mmc_widths')
-      if (raw) return JSON.parse(raw)
-    } catch {}
-    return {}
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('mmc_widths', JSON.stringify(widths))
-    } catch {}
-  }, [widths])
-
-  // Active drag state
-  const draggingRef = useRef<{ id: string; startX: number; startWidth: number } | null>(null)
-
-  const onMouseMove = (e: MouseEvent) => {
-    const drag = draggingRef.current
-    if (!drag) return
-    const delta = e.clientX - drag.startX
-    const next = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, drag.startWidth + delta))
-    setWidths((prev) => ({ ...prev, [drag.id]: next }))
-  }
+  // Removed resizable drag/width state; columns are equal-sized per layout rules
 
   // Refs to each model's scroll container
   const listRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -91,6 +62,18 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
     Object.keys(isLoading).forEach((id) => isLoading[id] && scrollToBottom(id))
   }, [isLoading])
 
+  // Re-scroll when the floating input's height changes (MessageInput dispatches a custom event)
+  useEffect(() => {
+    const handler = () => {
+      // Allow layout to settle before scrolling
+      requestAnimationFrame(() => {
+        Object.keys(listRefs.current || {}).forEach((id) => scrollToBottom(id, false))
+      })
+    }
+    document.addEventListener('input-height-change', handler as EventListener)
+    return () => document.removeEventListener('input-height-change', handler as EventListener)
+  }, [])
+
   // Typewriter component for the latest assistant message
   // Persist streaming progress per message to avoid restarts on re-render
   const streamProgressRef = useRef<Record<string, number>>({})
@@ -105,15 +88,15 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
   // Build shared Markdown components (self-contained, includes its own copy logic)
   const mdComponents = {
     p({ children }: any) {
-      return <p className={`mb-3 ${readerMode ? 'leading-8' : 'leading-7'} text-gray-200`}>{children}</p>
+      return <p className={`mb-3 ${readerMode ? 'leading-8' : 'leading-7'} text-gray-200 text-justify break-words`}>{children}</p>
     },
     h1({ children }: any) { return <h1 className="mt-4 mb-2 text-xl font-semibold text-white">{children}</h1> },
     h2({ children }: any) { return <h2 className="mt-4 mb-2 text-lg font-semibold text-white">{children}</h2> },
     h3({ children }: any) { return <h3 className="mt-3 mb-2 text-base font-semibold text-white">{children}</h3> },
     ul({ children }: any) { return <ul className="list-disc ml-5 my-3 space-y-1 text-gray-200">{children}</ul> },
     ol({ children }: any) { return <ol className="list-decimal ml-5 my-3 space-y-1 text-gray-200">{children}</ol> },
-    li({ children }: any) { return <li className="marker:text-gray-400">{children}</li> },
-    blockquote({ children }: any) { return <blockquote className="border-l-4 border-gray-600 pl-3 my-3 text-gray-300 italic">{children}</blockquote> },
+    li({ children }: any) { return <li className="marker:text-gray-400 text-justify break-words">{children}</li> },
+    blockquote({ children }: any) { return <blockquote className="border-l-4 border-gray-600 pl-3 my-3 text-gray-300 italic text-justify break-words">{children}</blockquote> },
     hr() { return <hr className="my-4 border-gray-700" /> },
     code({ inline, className, children, ...props }: any) {
       if (!inline) {
@@ -204,26 +187,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
     )
   }
 
-  const endDrag = () => {
-    draggingRef.current = null
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', endDrag)
-  }
-
-  const startDrag = (id: string, ev: React.MouseEvent<HTMLDivElement>) => {
-    const current = widths[id] ?? DEFAULT_WIDTH
-    draggingRef.current = { id, startX: ev.clientX, startWidth: current }
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', endDrag)
-  }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', endDrag)
-    }
-  }, [])
+  // No drag handlers; equal layout only
   
   // Copy to clipboard feedback state
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -256,7 +220,14 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
   // Removed unused getModelBorderColor function
 
-  const equalMode = models.length <= 1
+  // Determine which models to display: if any are enabled, show only enabled; otherwise show all
+  const visibleModels = (enabledCount && enabledCount > 0)
+    ? models.filter(m => enabledModels[m.id])
+    : models
+
+  // Equal layout for up to 3 models; beyond that, horizontal scroll with equal fixed-width columns
+  const equalMode = visibleModels.length <= 3
+  const COLUMN_WIDTH = 384
 
   // Extract DeepSeek <think> blocks and fenced code ```think blocks; return visible text + thinks
   const parseDeepseek = (text: string): { visible: string; thinks: string[] } => {
@@ -299,7 +270,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
     update()
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
-  }, [models, widths, equalMode])
+  }, [models, equalMode])
 
   const onMainScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
     if (syncingRef.current) return
@@ -366,11 +337,17 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
         onScroll={equalMode ? undefined : onMainScroll}
         className={`h-full flex ${equalMode ? 'overflow-x-auto' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}
       >
-        {models.map((model) => (
+        {visibleModels.map((model) => (
           <div
             key={model.id}
             className={`relative ${equalMode ? 'flex-1' : 'flex-shrink-0'} min-w-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
-            style={equalMode ? undefined : { width: (widths[model.id] ?? DEFAULT_WIDTH) + 'px' }}
+            style={equalMode ? (
+              // For 1-3 models, let flex distribute equally
+              undefined
+            ) : (
+              // For 4+, enforce equal fixed widths for all columns
+              { width: COLUMN_WIDTH + 'px' }
+            )}
           >
             {/* Model Header */}
             <div className="bg-gray-800 text-white px-4 py-3 flex items-center justify-between border-b border-gray-700/50">
@@ -418,7 +395,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
             <div
               ref={(el) => { listRefs.current[model.id] = el; }}
               className="flex-1 overflow-y-auto overflow-x-auto p-4 bg-gray-900 min-h-0 overscroll-contain"
-              style={{ paddingBottom: 'var(--input-height, 160px)' }}
+              style={{ paddingBottom: 'var(--input-height, 160px)', scrollPaddingBottom: 'var(--input-height, 160px)' as any }}
             >
               <div className="space-y-4">
                 {modelMessages[model.id]?.map((message, idx, arr) => (
@@ -439,6 +416,18 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                             >
                               {message.content}
                             </ReactMarkdown>
+                            {(() => {
+                              // Fallback: explicitly render any markdown images (e.g., blob: URLs) below the text
+                              const matches = Array.from(String(message.content || '').matchAll(/!\[[^\]]*\]\(([^)]+)\)/g))
+                              if (!matches.length) return null
+                              return (
+                                <div className="mt-2 space-y-2">
+                                  {matches.map((m, i) => (
+                                    <img key={i} src={m[1]} alt={`upload-${i}`} className="max-w-full h-auto rounded" />
+                                  ))}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                         <button className="text-gray-400 hover:text-white transition-colors">
@@ -559,16 +548,7 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
               </div>
             </div>
 
-            {/* Right-edge drag handle (hidden in equalMode) */}
-            {!equalMode && (
-              <div
-                role="separator"
-                aria-label={`Resize ${model.name} panel`}
-                aria-orientation="vertical"
-                className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-gray-500/30"
-                onMouseDown={(e) => startDrag(model.id, e)}
-              />
-            )}
+            {/* Drag handle removed to keep equal widths for 4+ as well */}
           </div>
         ))}
       </div>

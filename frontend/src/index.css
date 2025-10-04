@@ -12,9 +12,17 @@ body {
   color-scheme: dark;
 }
 
-/* Pointer cursor for all buttons */
-button {
-  cursor: pointer;
+/* Global scale to mimic ~80% browser zoom for cleaner, denser UI */
+html {
+  zoom: 0.8; /* Works in Chromium/Edge */
+}
+
+/* Fallback for browsers that don't support zoom (e.g., Firefox) */
+@supports not (zoom: 0.8) {
+  body {
+    transform: scale(0.8);
+    transform-origin: top left;
+  }
 }
 
 button:disabled,
