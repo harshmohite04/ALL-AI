@@ -1,9 +1,10 @@
 from langgraph.graph import START, END, StateGraph
 from constants import (
     llm_ChatOpenAI,
-    # llm_ChatAnthropic,
+    llm_ChatAnthropic,
     llm_ChatGoogleGenerativeAI,
     llm_ChatGroq,
+    llm_ChatDeepseek,
     # llm_ChatPerplexity,
     # llm_ChatXAI,
 )
@@ -13,6 +14,7 @@ from agent_schema import AgentState
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from pymongo import MongoClient
 import os
+from langchain_core.prompts import ChatPromptTemplate 
 
 MONGO_URI=os.getenv("MONGO_URI",)
 client = MongoClient(MONGO_URI)
@@ -31,53 +33,103 @@ def classify_model(state: AgentState):
 
 
 def OpenAI(state: AgentState) -> AgentState:
+    print("OpenAI called ...")
     openai_messages = state["openai_messages"]
-    
     openai_model_name = state["selected_models"]["OpenAI"]
-    response = llm_ChatOpenAI(openai_model_name).invoke(openai_messages)
+    print(openai_model_name)
+    if openai_model_name in ['openai/gpt-oss-120b','openai/gpt-oss-20b']:
+        response = llm_ChatGroq(openai_model_name).invoke(openai_messages)
+    else:
+        response = llm_ChatOpenAI(openai_model_name).invoke(openai_messages)
     return {"openai_messages": response}
 
 
 def Google(state: AgentState) -> AgentState:
+    print("Google called ...")
+    system_prompt="""Make sure you answer user in small answer and not big"""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", "{input}")
+    ])
+    
     google_messages = state["google_messages"]
     google_model_name = state["selected_models"]["Google"]
     print(google_model_name)
-    response = llm_ChatGoogleGenerativeAI(google_model_name).invoke(google_messages)
+    chain = prompt | llm_ChatGoogleGenerativeAI(google_model_name)
+    response = chain.invoke(google_messages)
+    print("Gemini")
+    print(response)
     return {"google_messages": response}
 
 def Groq(state: AgentState) -> AgentState:
     print("Groq called..")
+    system_prompt="""Make sure you answer user in small answer and not big"""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", "{input}")
+    ])
     groq_messages = state["groq_messages"]
     groq_model_name = state["selected_models"]["Groq"]
     print(groq_model_name)
-    response = llm_ChatGroq(groq_model_name).invoke(groq_messages)
+    chain = prompt | llm_ChatGroq(groq_model_name)
+    response = chain.invoke(groq_messages)
+    # print(response)
     return {"groq_messages": response}
 
+def Meta(state:AgentState)->AgentState:
+    print("Meta called...")
+    meta_messages = state["meta_messages"]
+    meta_model_name = state["selected_models"]["Meta"]
+    print(meta_model_name)
+    response = llm_ChatGroq(meta_model_name).invoke(meta_messages)
+    return {"meta_messages":response}
 
-# def Anthropic(state: AgentState) -> AgentState:
-#     user_query = state["user_query"]
-#     response_llm_ChatAnthropic = llm_ChatAnthropic.invoke(user_query)
-#     print(response_llm_ChatAnthropic)
+def Deepseek(state:AgentState)->AgentState:
+    print("DeepSeek called...")
+    deepseek_messages = state["deepseek_messages"]
+    deepseek_model_name = state["selected_models"]["Deepseek"]
+    print(deepseek_model_name)
+    if deepseek_model_name in ['deepseek-r1-distill-llama-70b']:
+        response = llm_ChatGroq(deepseek_model_name).invoke(deepseek_messages)
+    else:
+        response = llm_ChatDeepseek(deepseek_model_name).invoke(deepseek_messages)
+    return {"deepseek_messages":response}
 
-# def Grok(state: AgentState) -> AgentState:
-#     user_query = state["user_query"]
-#     response_llm_ChatGroq = llm_ChatGroq.invoke(user_query)
-#     print(response_llm_ChatGroq)
+def Anthropic(state: AgentState) -> AgentState:
+    print("Anthropic called...")
+    # system_prompt="""Make sure you answer user in small answer and not big"""
+    # prompt = ChatPromptTemplate.from_messages([
+    #     ("system", system_prompt),
+    #     ("user", "{input}")
+    # ])
+    
+    anthropic_messages = state["anthropic_messages"]
+    anthropic_model_name = state["selected_models"]["Anthropic"]
+    print(anthropic_model_name)
+    # chain = prompt| llm_ChatAnthropic(anthropic_model_name)
+    response = llm_ChatAnthropic(anthropic_model_name).invoke(anthropic_messages)
+    print(response)
+    return {"anthropic_messages": response}
 
-# def Perplexity(state: AgentState) -> AgentState:
-#     user_query = state["user_query"]
-#     response_llm_ChatPerplexity = llm_ChatPerplexity.invoke(user_query)
-#     print(response_llm_ChatPerplexity)
 
+def Alibaba(state:AgentState)->AgentState:
+    print("Alibaba called...")
+    alibaba_messages = state["alibaba_messages"]
+    alibaba_model_name = state["selected_models"]["Alibaba"]
+    print(alibaba_model_name)
+    response = llm_ChatGroq(alibaba_model_name).invoke(alibaba_messages)
+    return{"alibaba_messages":response}
 
 graph.add_node("classify_model", classify_model)
 
 graph.add_node("OpenAI", OpenAI)
 graph.add_node("Google", Google)
 graph.add_node("Groq", Groq)
-# graph.add_node("Anthropic", Anthropic)
-# graph.add_node("Grok", Grok)
-# graph.add_node("Perplexity", Perplexity)
+graph.add_node("Meta", Meta)
+graph.add_node("Deepseek", Deepseek)
+graph.add_node("Alibaba", Alibaba)
+graph.add_node("Anthropic", Anthropic)
+
 
 
 graph.add_conditional_edges(
@@ -87,37 +139,50 @@ graph.add_conditional_edges(
         "OpenAI": "OpenAI",
         "Google": "Google",
         "Groq": "Groq",
+        "Meta": "Meta",
+        "Deepseek": "Deepseek",
+        "Alibaba": "Alibaba",
+        "Anthropic": "Anthropic",
         END: END,
     },
 )
 
 graph.add_edge("OpenAI", END)
-# graph.add_edge("Anthropic",END)
 graph.add_edge("Google", END)
-# graph.add_edge("Grok",END)
-# graph.add_edge("Perplexity",END)
+graph.add_edge("Meta", END)
 graph.add_edge("Groq", END)
+graph.add_edge("Deepseek", END)
+graph.add_edge("Anthropic", END)
+graph.add_edge("Alibaba", END)
 
 checkpointer = MongoDBSaver(collection)
 workflow = graph.compile(checkpointer=checkpointer)
 
-# config1 = {"configurable": {"thread_id": "11112111111"}}
+# config1 = {"configurable": {"thread_id": "111121a11111"}}
 
 # result = workflow.invoke(
 #     {
-#         "openai_messages": [HumanMessage(content="what is my name")],
-#         "google_messages": [HumanMessage(content="what is my name")],
-#         "groq_messages": [HumanMessage(content="what is my name")],
+#         # "openai_messages": [HumanMessage(content="what is my name")],
+#         "google_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
+#         "groq_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
+#         "meta_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
+#         "anthropic_messages": [HumanMessage(content="hello my is harsh what is your name and model name")],
 #         "selected_models": {
-#             'OpenAI': 'gpt-4o',
+#             # 'OpenAI': 'gpt-4o',
 #             'Google': 'gemini-2.0-flash',
 #             'Groq': 'openai/gpt-oss-20b',
+#             'Meta': 'llama-3.3-70b-versatile',
+#             'Anthropic': 'claude-3-haiku-20240307',
 #         },
 #     },
 #     config=config1,
 # )
 
-
+# for i in result["anthropic_messages"]:
+#     print(i)
+        
+    
+    
 # result = workflow.invoke(
 #     {
 #         "openai_messages": [HumanMessage(content="My name is Harsh Mohite")],

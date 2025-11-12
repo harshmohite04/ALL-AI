@@ -1,8 +1,12 @@
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI, HTTPException, Body, UploadFile, File
 from pydantic import BaseModel, Field
 from agent import workflow
-from langchain_core.messages import HumanMessage
-from typing import Dict,Optional
+from langchain_core.messages import HumanMessage, SystemMessage
+from typing import Dict, Optional, List
+import os
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 
 from datetime import datetime
 from uuid import uuid4
@@ -18,11 +22,13 @@ origins = [
     # Local dev
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
     # Deployed frontend (IP)
-    "http://35.238.224.160",
-    "https://35.238.224.160",
+    "http://35.238.224.160:5173",
+
 ]
 
 app.add_middleware(
@@ -47,6 +53,84 @@ class APIInput(BaseModel):
         description="Dictionary mapping model name → model string"
     )
     session_id:str=Field(description="session_id")
+
+# ----------------------
+# Preprocess: PDF text and Image vision description
+# ----------------------
+from fastapi.responses import JSONResponse
+import mimetypes
+import tempfile
+import base64
+
+import fitz  # PyMuPDF
+from openai import OpenAI
+
+OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
+openai_client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
+
+def extract_text_from_pdf(file_path: str) -> str:
+    text = ""
+    doc = fitz.open(file_path)
+    for page in doc:
+        text += page.get_text()
+    return text.strip()
+
+def gpt_vision_extract(file_path: str) -> str:
+    # Return "" if no OPENAI key or on any OpenAI failure (graceful degrade)
+    if not OPENAI_KEY or not openai_client:
+        return ""
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+    try:
+        resp = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this image clearly under 120 words."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+                ]
+            }],
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        return ""
+
+@app.post("/preprocess")
+async def preprocess(file: UploadFile = File(...)):
+    try:
+        suffix = os.path.splitext(file.filename or "")[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+            file_path = tmp.name
+
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if not mime_type:
+            mime_type = file.content_type or "application/octet-stream"
+
+        note = None
+        if "pdf" in (mime_type or ""):
+            extracted_text = extract_text_from_pdf(file_path)
+        elif mime_type.startswith("image/"):
+            extracted_text = gpt_vision_extract(file_path)
+            if not extracted_text:
+                note = "vision_unavailable_or_failed"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {mime_type}")
+
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+
+        payload = {"extracted_text": extracted_text}
+        if note:
+            payload["note"] = note
+        return JSONResponse(payload)
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/")
 def read_root():
@@ -84,24 +168,44 @@ def get_history(session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     history = list(workflow.get_state_history(config=config))
     
-    print("history")
-    
     output = []
     for step in history:
         state = step.values
         step_messages = {}
-        for model_key in ["openai_messages", "google_messages", "groq_messages"]:
-            if model_key in state:
-                step_messages[model_key] = [
-                    {"role": "User" if msg.type == "human" else "AI", "content": msg.content}
-                    for msg in state[model_key]
+        # Dynamically include any keys that end with "_messages"
+        for key, msgs in state.items():
+            if isinstance(key, str) and key.endswith("_messages") and isinstance(msgs, list):
+                step_messages[key] = [
+                    {"role": "User" if getattr(msg, "type", "") == "human" else "AI", "content": getattr(msg, "content", "")}
+                    for msg in msgs
                 ]
         output.append(step_messages)
-        
-   
-    # print(history[0].values["google_messages"])
-    # print(history[0].values["groq_messages"])
+    
     return {"history": output}
+
+
+# Image and Video generation stubs
+class MediaGenInput(BaseModel):
+    prompt: str = Field(description="Prompt for generation")
+    provider: str = Field(description="Provider name, e.g., Midjourney, DALL·E 3, Stable Diffusion, Runway Gen-2, Nano Banana, Google Veo")
+    session_id: str = Field(description="Session ID for tracking")
+    client_time: Optional[datetime] = Field(default_factory=datetime.utcnow)
+
+
+@app.post("/image")
+def generate_image(input: MediaGenInput):
+    # Stub implementation: in real integration, call the respective provider API here.
+    # Return a placeholder image URL.
+    placeholder_url = "https://via.placeholder.com/1024x576.png?text=Generated+Image"
+    return {"url": placeholder_url, "provider": input.provider}
+
+
+@app.post("/video")
+def generate_video(input: MediaGenInput):
+    # Stub implementation: in real integration, call the respective provider API here.
+    # Return a placeholder video URL.
+    placeholder_url = "https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4"
+    return {"url": placeholder_url, "provider": input.provider}
 
 
 
@@ -135,6 +239,7 @@ def create_session(data: SessionCreate):
     # Validate and normalize email
     if not is_valid_email(data.account_id):
         raise HTTPException(status_code=400, detail="account_id must be a valid email address")
+    
     normalized_email = data.account_id.strip().lower()
     session_id = str(uuid4())
     new_session = {
@@ -170,6 +275,71 @@ def get_sessions(account_id: str):
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
+
+class TitleGenerationRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    model: str = "gpt-3.5-turbo"
+
+@app.post("/generate-title")
+async def generate_title(request: TitleGenerationRequest = Body(...)):
+    try:
+        # Initialize the appropriate LLM based on the model
+        if request.model.startswith("gpt"):
+            llm = ChatOpenAI(model=request.model, temperature=0.3)
+        elif request.model.startswith("gemini"):
+            llm = ChatGoogleGenerativeAI(model=request.model, temperature=0.3)
+        elif "groq" in request.model.lower():
+            llm = ChatGroq(model=request.model, temperature=0.3)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported model for title generation")
+
+        # Create a system message for title generation
+        system_message = SystemMessage(content="""
+        You are a helpful assistant that generates concise, descriptive titles for chat conversations.
+        Create a short, clear title (max 5-7 words) that summarizes the main topic of the conversation.
+        The title should be title-cased and should not include any special characters or emojis.
+        Focus on the main subject or question being discussed. This description is passed to the llm as image or pdf, so if user asks the llm what is in the pdf or image, do not say, i cannot see the image, as this description is an image ,so instead say something that makes user believe that the model can see the image. The model should pretend like it can actually see the image or pdf and the users should not know that models cannot see it.
+        """)
+
+        # Extract message content for context
+        conversation_context = "\n".join([f"{m.get('role', 'user').capitalize()}: {m.get('content', '')}" 
+                                    for m in request.messages[-3:]])  # Use last 3 messages for context
+
+        # Generate the title
+        response = await llm.ainvoke([
+            system_message,
+            HumanMessage(content=f"Generate a title for this conversation:\n\n{conversation_context}")
+        ])
+
+        # Clean up the response
+        title = response.content.strip().strip('"\'')
+        if len(title) > 60:  # Ensure title isn't too long
+            title = title[:57] + "..."
+            
+        return {"title": title}
+
+    except Exception as e:
+        print(f"Error generating title: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
+
+# ----------------------
+# API Key Management Endpoints
+# ----------------------
+from api_key_manager import api_key_manager, ProviderType
+
+@app.get("/api-keys/status")
+def get_api_keys_status():
+    """Get status of all API keys"""
+    return api_key_manager.get_all_status()
+
+@app.get("/api-keys/status/{provider}")
+def get_provider_status(provider: str):
+    """Get status of a specific provider's API keys"""
+    try:
+        provider_enum = ProviderType(provider.lower())
+        return api_key_manager.get_provider_status(provider_enum)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
 
 @app.put("/session/update/{account_id}/{session_id}")
 def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):

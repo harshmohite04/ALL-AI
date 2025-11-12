@@ -2,16 +2,16 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import HeroImg from '../assets/dr_strange.png'
 import ChatGPTLogo from '../assets/logos/chatgpt.png'
-import ClaudeLogo from '../assets/logos/cluade1.png'
+import ClaudeLogo from '../assets/logos/claude.png'
 import GroqLogo from '../assets/logos/groq.png'
 import MistralLogo from '../assets/logos/mistral.png'
 import GeminiLogo from '../assets/logos/gemini.png'
 import MidjourneyLogo from '../assets/logos/Midjourney.png'
 import DeepseekLogo from '../assets/logos/deepseek.png'
-import PerplexityLogo from '../assets/logos/Perplexity.jpg'
+import PerplexityLogo from '../assets/logos/perplexity.jpg'
 import MetaLogo from '../assets/logos/meta.jpg'
 import RunwayLogo from '../assets/logos/runway.png'
-import x1Logo from '../assets/logos/x1.png'
+import x1Logo from '../assets/logos/grok.png'
 import DeepmindLogo from '../assets/logos/deepmind.png'
 import HuggingfaceLogo from '../assets/logos/huggingface.png'
 import PikalabsLogo from '../assets/logos/pikalabs.jpg'
@@ -50,10 +50,10 @@ export default function Landing() {
           </nav>
         </header>
 
-        <main className="px-6 md:px-10 pt-16 pb-24">
+        <main className="px-6 md:px-10 pt-10 pb-24">
           <div className="relative grid lg:grid-cols-2 gap-10 items-center">
             {/* Left: Copy */}
-            <div className="max-w-2xl">
+            <div className="max-w-2xl -mt-40">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 bg-white/5 backdrop-blur-md text-xs uppercase tracking-widest">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 I’m <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-300 to-indigo-400">1000x</span>
@@ -109,7 +109,7 @@ export default function Landing() {
                 { src: MetaLogo, className: 'hero-badge meta w-15 h-15' },
                 { src: RunwayLogo, className: 'hero-badge runway w-15 h-15' },
                 { src: x1Logo, className: 'hero-badge x1 w-15 h-15' },
-                { src: DeepmindLogo, className: 'hero-badge deepmind w-15 h-15' },
+                // { src: DeepmindLogo, className: 'hero-badge deepmind w-15 h-15' },
                 { src: HuggingfaceLogo, className: 'hero-badge huggingface w-15 h-15' },
                 { src: PikalabsLogo, className: 'hero-badge pikalabs w-15 h-15' },
                 { src: CohereLogo, className: 'hero-badge cohere w-15 h-15  ' },
@@ -141,13 +141,13 @@ export default function Landing() {
         .midjourney { top: 5%; left: 20%; animation-delay: 2.7s; }
         .deepseek { top: 20%; left: 7%; animation-delay: 3.5s; }
         .perplexity { top: 30%; left: 5%; animation-delay: 4.0s; }
-        .meta { top: 20%; left: 80%; animation-delay: 4.0s; }
-        .runway { top: 29%; left: 83%; animation-delay: 4.0s; }
-        .x1 { top: 40%; left: 70%; animation-delay: 4.0s; }
-        .deepmind { top: 40%; left: 15%; animation-delay: 4.0s; }
-        .huggingface { top: 40%; left: 70%; animation-delay: 4.0s; }
-        .pikalabs { top: 50%; left: 25%; animation-delay: 4.0s; }
-        .cohere { top: 48%; left: 62%; animation-delay: 4.0s; }
+        .meta { top: 20%; left: 80%; animation-delay: 3.6s; }
+        .runway { top: 29%; left: 83%; animation-delay: 3.2s; }
+        .deepmind { top: 40%; left: 70%; animation-delay: 2.7s; }
+        .x1 { top: 40%; left: 15%; animation-delay: 2.4s; }
+        .huggingface { top: 40%; left: 70%; animation-delay: 1.3s; }
+        .pikalabs { top: 50%; left: 25%; animation-delay: 3.2s; }
+        .cohere { top: 48%; left: 62%; animation-delay: 2.0s; }
         @keyframes float {
           0% { transform: translateY(0px) translateX(0px) rotate(0deg); }
           25% { transform: translateY(-8px) translateX(6px) rotate(2deg); }

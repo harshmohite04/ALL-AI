@@ -1,10 +1,5 @@
-import requests
+from openai import OpenAI
 
-payload = {
-    "user_query": "Hello, what is my name?",
-    "models": ["OpenAI", "Groq"]
-}
-
-res = requests.post("http://127.0.0.1:8000/chat", json=payload)
-print(res.json())
-
+# for backward compatibility, you can still use `https://api.deepseek.com/v1` as `base_url`.
+client = OpenAI(api_key="sk-6f12b3ee25f847a896feed44e18e4b6d", base_url="https://api.deepseek.com")
+print(client.models.list())

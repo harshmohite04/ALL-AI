@@ -20,8 +20,8 @@ router.post('/signup', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10)
     const user = await User.create({ name, email, passwordHash })
 
-    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email }, JWT_SECRET, { expiresIn: '7d' })
-    res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name } })
+    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email, userclass: user.userclass || 'basic' }, JWT_SECRET, { expiresIn: '7d' })
+    res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name, userclass: user.userclass || 'basic' } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Internal Server Error' })
@@ -39,13 +39,12 @@ router.post('/signin', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash)
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
 
-    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email }, JWT_SECRET, { expiresIn: '7d' })
-    res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name } })
+    const token = jwt.sign({ sub: user.email, email: user.email, account_id: user.email, userclass: user.userclass || 'basic' }, JWT_SECRET, { expiresIn: '7d' })
+    res.json({ token, user: { id: user._id.toString(), email: user.email, name: user.name, userclass: user.userclass || 'basic' } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Internal Server Error' })
   }
 })
-
 export default router
 

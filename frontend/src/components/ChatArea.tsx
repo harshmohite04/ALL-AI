@@ -1,3 +1,6 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
 interface Message {
   id: string
   content: string
@@ -36,8 +39,42 @@ export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
                   : 'bg-gray-100 text-gray-900'
               } rounded-2xl px-4 py-3`}
             >
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {message.content}
+              <div className="text-sm leading-relaxed break-words">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ inline, className, children, ...props }: any) {
+                      if (!inline) {
+                        return (
+                          <pre className="bg-black text-gray-100 rounded-lg p-4 overflow-x-auto my-2">
+                            <code className={className} {...props}>{children}</code>
+                          </pre>
+                        )
+                      }
+                      return (
+                        <code className="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded" {...props}>{children}</code>
+                      )
+                    },
+                    table({ children }: any) {
+                      return (
+                        <div className="w-full overflow-x-auto my-3">
+                          <table className="min-w-full border border-gray-300 text-sm text-gray-900">{children}</table>
+                        </div>
+                      )
+                    },
+                    thead({ children }: any) {
+                      return <thead className="bg-gray-200 text-gray-900">{children}</thead>
+                    },
+                    th({ children }: any) {
+                      return <th className="border border-gray-300 bg-gray-200 px-3 py-2 text-left font-semibold">{children}</th>
+                    },
+                    td({ children }: any) {
+                      return <td className="border border-gray-300 px-3 py-2 align-top">{children}</td>
+                    }
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
               </div>
               <div
                 className={`text-xs mt-2 ${
