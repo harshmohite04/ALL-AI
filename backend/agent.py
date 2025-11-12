@@ -9,12 +9,13 @@ from constants import (
     # llm_ChatXAI,
 )
 from langgraph.checkpoint.memory import InMemorySaver
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from agent_schema import AgentState
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from pymongo import MongoClient
 import os
-from langchain_core.prompts import ChatPromptTemplate 
+from langchain_core.prompts import ChatPromptTemplate
+from role_prompts import get_role_prompt 
 
 MONGO_URI=os.getenv("MONGO_URI",)
 client = MongoClient(MONGO_URI)
@@ -36,88 +37,117 @@ def OpenAI(state: AgentState) -> AgentState:
     print("OpenAI called ...")
     openai_messages = state["openai_messages"]
     openai_model_name = state["selected_models"]["OpenAI"]
-    print(openai_model_name)
+    role = state.get("role", "General")
+    print(f"OpenAI model: {openai_model_name}, Role: {role}")
+    
+    # Add role-based system prompt
+    system_prompt = get_role_prompt(role)
+    messages_with_system = [SystemMessage(content=system_prompt)] + openai_messages
+    
     if openai_model_name in ['openai/gpt-oss-120b','openai/gpt-oss-20b']:
-        response = llm_ChatGroq(openai_model_name).invoke(openai_messages)
+        response = llm_ChatGroq(openai_model_name).invoke(messages_with_system)
     else:
-        response = llm_ChatOpenAI(openai_model_name).invoke(openai_messages)
+        response = llm_ChatOpenAI(openai_model_name).invoke(messages_with_system)
     return {"openai_messages": response}
 
 
 def Google(state: AgentState) -> AgentState:
     print("Google called ...")
-    system_prompt="""Make sure you answer user in small answer and not big"""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", "{input}")
-    ])
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"Google Role: {role}")
     
     google_messages = state["google_messages"]
     google_model_name = state["selected_models"]["Google"]
     print(google_model_name)
-    chain = prompt | llm_ChatGoogleGenerativeAI(google_model_name)
-    response = chain.invoke(google_messages)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + google_messages
+    response = llm_ChatGoogleGenerativeAI(google_model_name).invoke(messages_with_system)
     print("Gemini")
     print(response)
     return {"google_messages": response}
 
 def Groq(state: AgentState) -> AgentState:
     print("Groq called..")
-    system_prompt="""Make sure you answer user in small answer and not big"""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", "{input}")
-    ])
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"Groq Role: {role}")
+    
     groq_messages = state["groq_messages"]
     groq_model_name = state["selected_models"]["Groq"]
     print(groq_model_name)
-    chain = prompt | llm_ChatGroq(groq_model_name)
-    response = chain.invoke(groq_messages)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + groq_messages
+    response = llm_ChatGroq(groq_model_name).invoke(messages_with_system)
     # print(response)
     return {"groq_messages": response}
 
 def Meta(state:AgentState)->AgentState:
     print("Meta called...")
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"Meta Role: {role}")
+    
     meta_messages = state["meta_messages"]
     meta_model_name = state["selected_models"]["Meta"]
     print(meta_model_name)
-    response = llm_ChatGroq(meta_model_name).invoke(meta_messages)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + meta_messages
+    response = llm_ChatGroq(meta_model_name).invoke(messages_with_system)
     return {"meta_messages":response}
 
 def Deepseek(state:AgentState)->AgentState:
     print("DeepSeek called...")
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"DeepSeek Role: {role}")
+    
     deepseek_messages = state["deepseek_messages"]
     deepseek_model_name = state["selected_models"]["Deepseek"]
     print(deepseek_model_name)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + deepseek_messages
+    
     if deepseek_model_name in ['deepseek-r1-distill-llama-70b']:
-        response = llm_ChatGroq(deepseek_model_name).invoke(deepseek_messages)
+        response = llm_ChatGroq(deepseek_model_name).invoke(messages_with_system)
     else:
-        response = llm_ChatDeepseek(deepseek_model_name).invoke(deepseek_messages)
+        response = llm_ChatDeepseek(deepseek_model_name).invoke(messages_with_system)
     return {"deepseek_messages":response}
 
 def Anthropic(state: AgentState) -> AgentState:
     print("Anthropic called...")
-    # system_prompt="""Make sure you answer user in small answer and not big"""
-    # prompt = ChatPromptTemplate.from_messages([
-    #     ("system", system_prompt),
-    #     ("user", "{input}")
-    # ])
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"Anthropic Role: {role}")
     
     anthropic_messages = state["anthropic_messages"]
     anthropic_model_name = state["selected_models"]["Anthropic"]
     print(anthropic_model_name)
-    # chain = prompt| llm_ChatAnthropic(anthropic_model_name)
-    response = llm_ChatAnthropic(anthropic_model_name).invoke(anthropic_messages)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + anthropic_messages
+    response = llm_ChatAnthropic(anthropic_model_name).invoke(messages_with_system)
     print(response)
     return {"anthropic_messages": response}
 
 
 def Alibaba(state:AgentState)->AgentState:
     print("Alibaba called...")
+    role = state.get("role", "General")
+    system_prompt = get_role_prompt(role)
+    print(f"Alibaba Role: {role}")
+    
     alibaba_messages = state["alibaba_messages"]
     alibaba_model_name = state["selected_models"]["Alibaba"]
     print(alibaba_model_name)
-    response = llm_ChatGroq(alibaba_model_name).invoke(alibaba_messages)
+    
+    # Add role-based system prompt
+    messages_with_system = [SystemMessage(content=system_prompt)] + alibaba_messages
+    response = llm_ChatGroq(alibaba_model_name).invoke(messages_with_system)
     return{"alibaba_messages":response}
 
 graph.add_node("classify_model", classify_model)

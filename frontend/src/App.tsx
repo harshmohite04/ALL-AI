@@ -720,6 +720,7 @@ function App() {
           user_query: requestContent,
           selected_models,
           session_id: sessionIdToUse,
+          role: activeRole,
           client_time: toLocalIsoWithOffset(timestamp),
         })
       })

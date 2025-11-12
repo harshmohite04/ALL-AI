@@ -52,7 +52,8 @@ class APIInput(BaseModel):
         default={"OpenAI": "gpt-4o", "Google": "gemini-2.0-flash", "Groq": "openai/gpt-oss-20b"},
         description="Dictionary mapping model name → model string"
     )
-    session_id:str=Field(description="session_id")
+    session_id: str = Field(description="session_id")
+    role: str = Field(default="General", description="User's selected role for specialized responses")
 
 # ----------------------
 # Preprocess: PDF text and Image vision description
@@ -144,8 +145,11 @@ def health():
 def chat(input: APIInput):
     config = {"configurable": {"thread_id": input.session_id}}
 
-    # Prepare state only for selected models
-    state = {"selected_models": input.selected_models}
+    # Prepare state only for selected models, including role
+    state = {
+        "selected_models": input.selected_models,
+        "role": input.role
+    }
     for model_name in input.selected_models.keys():
         key = f"{model_name.lower()}_messages"
         state[key] = [HumanMessage(content=input.user_query)]

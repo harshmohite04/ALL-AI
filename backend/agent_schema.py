@@ -15,3 +15,4 @@ class AgentState(TypedDict, total=False):
     alibaba_messages:Annotated[list[BaseMessage],add_messages]
     anthropic_messages:Annotated[list[BaseMessage],add_messages]
     selected_models: Dict[str,str]
+    role: str

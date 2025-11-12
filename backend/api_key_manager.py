@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta
 import json
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -304,7 +308,7 @@ class APIKeyManager:
                     "consecutive_errors": usage.consecutive_errors,
                     "block_until": datetime.fromtimestamp(usage.block_until).isoformat() if usage.block_until else None
                 })
-        
+                
         available_keys = len([s for s in key_statuses if not s["is_rate_limited"] and not s["is_blocked"]])
         
         return {
