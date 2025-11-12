@@ -322,6 +322,25 @@ async def generate_title(request: TitleGenerationRequest = Body(...)):
         print(f"Error generating title: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating title: {str(e)}")
 
+# ----------------------
+# API Key Management Endpoints
+# ----------------------
+from api_key_manager import api_key_manager, ProviderType
+
+@app.get("/api-keys/status")
+def get_api_keys_status():
+    """Get status of all API keys"""
+    return api_key_manager.get_all_status()
+
+@app.get("/api-keys/status/{provider}")
+def get_provider_status(provider: str):
+    """Get status of a specific provider's API keys"""
+    try:
+        provider_enum = ProviderType(provider.lower())
+        return api_key_manager.get_provider_status(provider_enum)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}")
+
 @app.put("/session/update/{account_id}/{session_id}")
 def update_session(account_id: str, session_id: str, session_name: Optional[str] = None):
     if not is_valid_email(account_id):

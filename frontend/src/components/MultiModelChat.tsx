@@ -40,7 +40,7 @@ interface MultiModelChatProps {
 }
 
 export default function MultiModelChat({ models, modelMessages, isLoading, selectedVersions, onVersionChange, enabledModels, onToggleModel, plan = 'basic', sessionTitle, enabledCount }: MultiModelChatProps) {
-  // Removed resizable drag/width state; columns are equal-sized per layout rules
+  // Resizable columns state and logic
 
   // Refs to each model's scroll container
   const listRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -272,6 +272,106 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
     return () => window.removeEventListener('resize', update)
   }, [models, equalMode])
 
+  // Column widths management
+  const [colWidths, setColWidths] = useState<number[]>([])
+  const MIN_PCT = 15 // percent per column for 1-3 models
+  const MIN_PX = 240 // pixels per column for 4+ models
+
+  // Initialize/reset widths when visible models or mode changes
+  useEffect(() => {
+    const n = visibleModels.length
+    if (n <= 0) { setColWidths([]); return }
+    if (equalMode) {
+      const per = 100 / n
+      setColWidths(Array.from({ length: n }, () => per))
+    } else {
+      setColWidths(Array.from({ length: n }, () => COLUMN_WIDTH))
+    }
+  }, [visibleModels, equalMode])
+
+  // Drag interaction between adjacent columns
+  const dragState = useRef<{
+    index: number // handle between index and index+1
+    startX: number
+    start: number[]
+  } | null>(null)
+
+  const onDragMove = (e: MouseEvent) => {
+    const st = dragState.current
+    if (!st) return
+    const dx = e.clientX - st.startX
+    setColWidths(() => {
+      const next = [...st.start]
+      const i = st.index
+      if (equalMode) {
+        const containerW = Math.max(1, hScrollRef.current?.clientWidth || 1)
+        const dPct = (dx / containerW) * 100
+        let w1 = next[i] + dPct
+        let w2 = next[i + 1] - dPct
+        // Enforce min bounds
+        w1 = Math.max(MIN_PCT, w1)
+        w2 = Math.max(MIN_PCT, w2)
+        // Adjust delta to maintain total if clamped
+        const totalOthers = next.reduce((s, v, idx) => s + (idx === i || idx === i + 1 ? 0 : v), 0)
+        const remaining = 100 - totalOthers
+        const sumPair = w1 + w2
+        if (sumPair !== remaining) {
+          const scale = remaining / sumPair
+          w1 *= scale
+          w2 *= scale
+        }
+        next[i] = w1
+        next[i + 1] = w2
+      } else {
+        let w1 = next[i] + dx
+        let w2 = next[i + 1] - dx
+        // Enforce min bounds
+        if (w1 < MIN_PX) {
+          const diff = MIN_PX - w1
+          w1 = MIN_PX
+          w2 -= diff
+        }
+        if (w2 < MIN_PX) {
+          const diff = MIN_PX - w2
+          w2 = MIN_PX
+          w1 -= diff
+        }
+        next[i] = w1
+        next[i + 1] = w2
+      }
+      return next
+    })
+  }
+
+  const onDragUp = () => {
+    if (dragState.current) {
+      dragState.current = null
+      document.removeEventListener('mousemove', onDragMove)
+      document.removeEventListener('mouseup', onDragUp)
+      // Restore document styles
+      try {
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+      } catch {}
+      // After layout settles, sync the top scrollbar width
+      requestAnimationFrame(() => {
+        if (hScrollRef.current) setTopWidth(hScrollRef.current.scrollWidth)
+      })
+    }
+  }
+
+  const startDrag = (index: number) => (e: React.MouseEvent) => {
+    e.preventDefault()
+    dragState.current = { index, startX: e.clientX, start: [...colWidths] }
+    document.addEventListener('mousemove', onDragMove)
+    document.addEventListener('mouseup', onDragUp)
+    // Prevent text selection and show resizing cursor globally
+    try {
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'col-resize'
+    } catch {}
+  }
+
   const onMainScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
     if (syncingRef.current) return
     syncingRef.current = true
@@ -337,16 +437,16 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
         onScroll={equalMode ? undefined : onMainScroll}
         className={`h-full flex ${equalMode ? 'overflow-x-auto' : 'overflow-x-auto horizontal-scroll'} min-h-0 items-stretch`}
       >
-        {visibleModels.map((model) => (
+        {visibleModels.map((model, idx) => (
           <div
             key={model.id}
-            className={`relative ${equalMode ? 'flex-1' : 'flex-shrink-0'} min-w-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
+            className={`relative flex-none min-w-0 flex flex-col border-r border-gray-700/50 last:border-r-0 min-h-0`}
             style={equalMode ? (
-              // For 1-3 models, let flex distribute equally
-              undefined
+              // For 1-3 models, use percentage-based width with flex-none
+              { width: `${colWidths[idx] ?? (100 / Math.max(1, visibleModels.length))}%` }
             ) : (
-              // For 4+, enforce equal fixed widths for all columns
-              { width: COLUMN_WIDTH + 'px' }
+              // For 4+, use pixel-based widths
+              { width: (colWidths[idx] ?? COLUMN_WIDTH) + 'px' }
             )}
           >
             {/* Model Header */}
@@ -548,7 +648,16 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
               </div>
             </div>
 
-            {/* Drag handle removed to keep equal widths for 4+ as well */}
+            {/* Drag handle between columns */}
+            {idx < visibleModels.length - 1 && (
+              <div
+                onMouseDown={startDrag(idx)}
+                className="absolute top-0 -right-1 h-full w-3 z-20 cursor-col-resize bg-transparent hover:bg-gray-600/40 select-none"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize column"
+              />
+            )}
           </div>
         ))}
       </div>
