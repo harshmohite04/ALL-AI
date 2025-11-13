@@ -7,7 +7,7 @@ import os
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
-
+from urllib.parse import unquote
 from datetime import datetime
 from pymongo import MongoClient
 
@@ -31,7 +31,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # switch to ["*"] if you need to quickly test any origin
+    allow_origins=["*"],       # switch to ["*"] if you need to quickly test any origin
     allow_credentials=True,
     allow_methods=["*"],         # ensures OPTIONS, POST, DELETE, etc. are allowed
     allow_headers=["*"],         # ensures Content-Type, Accept headers are allowed
@@ -266,10 +266,16 @@ def create_session(data: SessionCreate):
 
     return {"message": "Session created", "session_id": session_id}
 
+@app.options("/session/{account_id}")
+def options_session(account_id: str):
+    return {}
+
 
 @app.get("/session/{account_id}")
 def get_sessions(account_id: str):
     # Validate and normalize email
+    account_id = unquote(account_id)
+
     if not is_valid_email(account_id):
         raise HTTPException(status_code=400, detail="account_id must be a valid email address")
     normalized_email = account_id.strip().lower()
