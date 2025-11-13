@@ -39,6 +39,8 @@ app.add_middleware(
 
 # Use a safe default for local development if MONGO_URI is not set
 MONGO_URI = os.getenv("MONGO_URI") or "mongodb://127.0.0.1:27017"
+PORT = os.getenv("PORT")
+
 client = MongoClient(MONGO_URI)
 db = client["LangGraphDB"]
 session_collection = db["sessionManagement"]
@@ -383,4 +385,4 @@ def delete_session(account_id: str, session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
