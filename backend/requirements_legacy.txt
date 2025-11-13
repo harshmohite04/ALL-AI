@@ -1,0 +1,14 @@
+langgraph==0.6.7
+langchain_openai==0.3.33
+langchain_groq==0.3.8
+langchain_google_genai==2.1.12
+fastapi==0.117.1
+uvicorn==0.37.0
+python-dotenv==1.1.1
+langgraph-checkpoint-mongodb==0.2.0
+langchain_anthropic==0.3.21
+langchain_deepseek==0.1.4
+PyMuPDF==1.24.14
+python-multipart==0.0.17
+pymongo==4.10.1
+openai==1.58.1
