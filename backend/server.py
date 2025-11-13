@@ -9,10 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
 from datetime import datetime
-from uuid import uuid4
 from pymongo import MongoClient
-import os
-import re
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -221,6 +218,7 @@ class SessionCreate(BaseModel):
     last_activity: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Client-side last activity timestamp")
 
 def is_valid_email(email: str) -> bool:
+    import re
     if not isinstance(email, str):
         return False
     email = email.strip()
@@ -241,6 +239,7 @@ def create_session(data: SessionCreate):
         raise HTTPException(status_code=400, detail="account_id must be a valid email address")
     
     normalized_email = data.account_id.strip().lower()
+    from uuid import uuid4
     session_id = str(uuid4())
     new_session = {
         "session_id": session_id,
