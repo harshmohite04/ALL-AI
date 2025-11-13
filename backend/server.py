@@ -25,6 +25,7 @@ origins = [
     "http://127.0.0.1:8000",
     # Deployed frontend (IP)
     "http://35.238.224.160:5173",
+    "https://all-ai-rosy.vercel.app"
 
 ]
 
