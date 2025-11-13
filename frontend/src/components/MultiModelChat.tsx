@@ -552,9 +552,11 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
                           <div className="text-sm text-gray-300 leading-relaxed" style={{ fontSize: `${clamp(fontScale)}rem` }}>
                             {(idx === arr.length - 1 && message.animate) ? (
                               <TypewriterMarkdown
+                                id={message.id}
                                 // Animate sanitized text without <think>
                                 text={parseDeepseek(message.content).visible}
-                                onTick={() => scrollToBottom(model.id, false)} id={''}                              />
+                                onTick={() => scrollToBottom(model.id, false)}
+                              />
                             ) : (
                               <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}

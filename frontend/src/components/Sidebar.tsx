@@ -41,7 +41,7 @@ interface SidebarProps {
   onToggleCollapsed?: () => void
 }
 
-export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, enabledCount, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan, collapsed = false, onToggleCollapsed }: SidebarProps) {
+export default function Sidebar({ models, enabledModels, onToggleModel, selectedVersions: _selectedVersions, onVersionChange: _onVersionChange, conversations, activeConversationId, onSelectConversation, onNewChat, onRenameConversation, onDeleteConversation, activeRole, onRoleChange, selectedImageProviders: _selectedImageProviders, onToggleImageProvider: _onToggleImageProvider, selectedVideoProviders: _selectedVideoProviders, onToggleVideoProvider: _onToggleVideoProvider, plan, collapsed = false, onToggleCollapsed }: SidebarProps) {
   const { user, openAuth, signOut, isLoading } = useAuth()
 
   // Sidebar segmented control: 'chat' | 'model' | 'role'

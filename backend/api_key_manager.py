@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta
 import json
-
+from dotenv import load_dotenv
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
