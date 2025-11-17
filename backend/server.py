@@ -7,6 +7,7 @@ import os
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from constants import llm_ChatPerplexity
 from urllib.parse import unquote
 from datetime import datetime
 from pymongo import MongoClient
@@ -42,8 +43,8 @@ app.add_middleware(
 
 # Use a safe default for local development if MONGO_URI is not set
 MONGO_URI = os.getenv("MONGO_URI") or "mongodb://127.0.0.1:27017"
-PORT = os.getenv("PORT")
-
+# PORT = os.getenv("PY_PORT")
+PORT = 8000
 client = MongoClient(MONGO_URI)
 db = client["LangGraphDB"]
 session_collection = db["sessionManagement"]
@@ -54,7 +55,8 @@ class APIInput(BaseModel):
         default={"OpenAI": "gpt-4o", "Google": "gemini-2.0-flash", "Groq": "openai/gpt-oss-20b"},
         description="Dictionary mapping model name → model string"
     )
-    session_id:str=Field(description="session_id")
+    session_id: str = Field(description="session_id")
+    role: Optional[str] = Field(default=None, description="Active role (e.g. Finance, Coding, General)")
 
 # ----------------------
 # Preprocess: PDF text and Image vision description
@@ -146,11 +148,46 @@ def health():
 def chat(input: APIInput):
     config = {"configurable": {"thread_id": input.session_id}}
 
+    # Optionally prepend fresh web context from Perplexity for non-general roles
+    augmented_query = input.user_query
+    role = (input.role or "").strip()
+    try:
+        if role and role not in {"General", "Image Generation", "Video Generation"}:
+            # Best-effort Perplexity search: if it fails, we silently fall back to the original query
+            system_msg = SystemMessage(content=(
+                "You are a live web research agent using Perplexity. "
+                "Use web search tools to gather the most recent and relevant information for the user's question, "
+                "with a focus on factual, up-to-date data (prices, recent events, statistics, etc.). "
+                "Respond ONLY with a concise markdown summary of your findings; do not answer as the final assistant."
+            ))
+            perp_messages = [
+                system_msg,
+                HumanMessage(content=input.user_query),
+            ]
+            # Use a stable default Perplexity search model
+            perp_llm = llm_ChatPerplexity("sonar")
+            perp_resp = perp_llm.invoke(perp_messages)
+            perp_content = getattr(perp_resp, "content", None) or str(perp_resp)
+
+            augmented_query = (
+                f"You are answering in the '{role}' role. Here is fresh web context fetched via Perplexity search:\n\n"
+                f"{perp_content}\n\n"
+                f"Now answer the user's question using this context. "
+                f"If the context doesn't fully cover the question, state that clearly.\n\n"
+                f"User question: {input.user_query}"
+            )
+    except Exception as e:
+        # Log and continue with the original query if Perplexity fails
+        try:
+            print(f"[Perplexity-web-context] failed: {e}")
+        except Exception:
+            pass
+
     # Prepare state only for selected models
     state = {"selected_models": input.selected_models}
     for model_name in input.selected_models.keys():
         key = f"{model_name.lower()}_messages"
-        state[key] = [HumanMessage(content=input.user_query)]
+        state[key] = [HumanMessage(content=augmented_query)]
 
     # Run workflow
     result = workflow.invoke(state, config=config)

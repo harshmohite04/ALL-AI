@@ -17,6 +17,7 @@ class ProviderType(Enum):
     GROQ = "groq"
     ANTHROPIC = "anthropic"
     DEEPSEEK = "deepseek"
+    PERPLEXITY = "perplexity"
 
 @dataclass
 class RateLimitInfo:
@@ -143,6 +144,11 @@ class APIKeyManager:
                 requests_per_minute=60,
                 requests_per_hour=3600,
                 requests_per_day=86400
+            ),
+            ProviderType.PERPLEXITY: RateLimitInfo(
+                requests_per_minute=60,
+                requests_per_hour=1000,
+                requests_per_day=50000
             )
         }
     
@@ -207,6 +213,18 @@ class APIKeyManager:
         if deepseek_keys:
             self.provider_keys[ProviderType.DEEPSEEK] = deepseek_keys
             self.current_key_index[ProviderType.DEEPSEEK] = 0
+
+        # Perplexity keys
+        perplexity_keys = []
+        for i in range(1, 11):
+            key = os.getenv(f"PPLX_API_KEY_{i}") or (os.getenv("PPLX_API_KEY") if i == 1 else None)
+            if key:
+                perplexity_keys.append(key)
+                self.key_usage[f"perplexity_{i}"] = KeyUsage(key_id=f"perplexity_{i}")
+
+        if perplexity_keys:
+            self.provider_keys[ProviderType.PERPLEXITY] = perplexity_keys
+            self.current_key_index[ProviderType.PERPLEXITY] = 0
         
         logger.info(f"Loaded API keys: {[(p.value, len(keys)) for p, keys in self.provider_keys.items()]}")
     

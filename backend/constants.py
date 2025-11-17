@@ -1,10 +1,12 @@
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.chat_models import ChatPerplexity
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_deepseek import ChatDeepSeek
 from api_key_manager import api_key_manager, ProviderType
+
 import logging
 
 load_dotenv()
@@ -78,4 +80,20 @@ def llm_ChatDeepseek(deepseek_model_name):
         model=deepseek_model_name,  
         temperature=0.7,
         api_key=api_key
+    )
+
+def llm_ChatPerplexity(perplexity_model_name: str):
+    key_info = api_key_manager.get_available_key(ProviderType.PERPLEXITY)
+    if not key_info:
+        raise Exception("No available Perplexity API keys")
+
+    api_key, key_id = key_info
+    logger.info(f"Using Perplexity key: {key_id}")
+
+    # ChatPerplexity reads PPLX_API_KEY from environment if not passed explicitly,
+    # but we pass api_key so it works with our rotation system.
+    return ChatPerplexity(
+        model=perplexity_model_name,
+        temperature=0.7,
+        api_key=api_key,
     )

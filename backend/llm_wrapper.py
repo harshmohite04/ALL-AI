@@ -5,7 +5,7 @@ from functools import wraps
 from api_key_manager import api_key_manager, ProviderType
 from constants import (
     llm_ChatOpenAI, llm_ChatGoogleGenerativeAI, llm_ChatGroq, 
-    llm_ChatAnthropic, llm_ChatDeepseek
+    llm_ChatAnthropic, llm_ChatDeepseek, llm_ChatPerplexity,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ class LLMWrapper:
             ProviderType.GOOGLE: llm_ChatGoogleGenerativeAI,
             ProviderType.GROQ: llm_ChatGroq,
             ProviderType.ANTHROPIC: llm_ChatAnthropic,
-            ProviderType.DEEPSEEK: llm_ChatDeepseek
+            ProviderType.DEEPSEEK: llm_ChatDeepseek,
+            ProviderType.PERPLEXITY: llm_ChatPerplexity,
         }
     
     def _get_provider_from_model(self, model_name: str) -> ProviderType:
@@ -36,6 +37,8 @@ class LLMWrapper:
             return ProviderType.ANTHROPIC
         elif 'deepseek' in model_lower:
             return ProviderType.DEEPSEEK
+        elif any(x in model_lower for x in ['sonar', 'perplexity', 'pplx']):
+            return ProviderType.PERPLEXITY
         else:
             # Default fallback - you might want to adjust this
             return ProviderType.OPENAI

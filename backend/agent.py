@@ -5,7 +5,7 @@ from constants import (
     llm_ChatGoogleGenerativeAI,
     llm_ChatGroq,
     llm_ChatDeepseek,
-    # llm_ChatPerplexity,
+    llm_ChatPerplexity,
     # llm_ChatXAI,
 )
 from langgraph.checkpoint.memory import InMemorySaver
@@ -95,6 +95,14 @@ def Deepseek(state:AgentState)->AgentState:
         response = llm_ChatDeepseek(deepseek_model_name).invoke(deepseek_messages)
     return {"deepseek_messages":response}
 
+def Perplexity(state:AgentState)->AgentState:
+    print("Perplexity called...")
+    perplexity_messages = state["perplexity_messages"]
+    perplexity_model_name = state["selected_models"]["Perplexity"]
+    print(perplexity_model_name)
+    response = llm_ChatPerplexity(perplexity_model_name).invoke(perplexity_messages)
+    return {"perplexity_messages": response}
+
 def Anthropic(state: AgentState) -> AgentState:
     print("Anthropic called...")
     # system_prompt="""Make sure you answer user in small answer and not big"""
@@ -129,6 +137,7 @@ graph.add_node("Meta", Meta)
 graph.add_node("Deepseek", Deepseek)
 graph.add_node("Alibaba", Alibaba)
 graph.add_node("Anthropic", Anthropic)
+graph.add_node("Perplexity", Perplexity)
 
 
 
@@ -143,6 +152,7 @@ graph.add_conditional_edges(
         "Deepseek": "Deepseek",
         "Alibaba": "Alibaba",
         "Anthropic": "Anthropic",
+        "Perplexity": "Perplexity",
         END: END,
     },
 )
@@ -154,6 +164,7 @@ graph.add_edge("Groq", END)
 graph.add_edge("Deepseek", END)
 graph.add_edge("Anthropic", END)
 graph.add_edge("Alibaba", END)
+graph.add_edge("Perplexity", END)
 
 checkpointer = MongoDBSaver(collection)
 workflow = graph.compile(checkpointer=checkpointer)

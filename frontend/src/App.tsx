@@ -122,7 +122,9 @@ const MODELS = [
     name: 'Perplexity', 
     color: 'orange', 
     icon: Perplexity,
-    versions: ['sonar-small-online', 'sonar-large-online']
+    versions: ['sonar', 'sonar-pro', 'sonar-reasoning-pro'],
+    // versions: ['sonar-small-online', 'sonar-large-online'],
+    providerKey: 'Perplexity'
   }
   ,
   { 
@@ -193,7 +195,7 @@ function App() {
     gemini: 'gemini-2.0-flash',
     deepseek: 'deepseek-r1-distill-llama-70b',
     groq: 'openai/gpt-oss-20b',
-    perplexity: 'sonar-small-online',
+    perplexity: 'sonar',
     cohere: 'command-r',
     meta: 'llama-3.1-8b-instant',
     mistral: 'mistral-small',
@@ -721,6 +723,7 @@ function App() {
           selected_models,
           session_id: sessionIdToUse,
           client_time: toLocalIsoWithOffset(timestamp),
+          role: activeRole,
         })
       })
 

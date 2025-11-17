@@ -11,7 +11,6 @@ class AgentState(TypedDict, total=False):
     mistral_messages:Annotated[list[BaseMessage],add_messages]
     alibaba_messages:Annotated[list[BaseMessage],add_messages]
     deepseek_messages:Annotated[list[BaseMessage],add_messages]
-    mistral_messages:Annotated[list[BaseMessage],add_messages]
-    alibaba_messages:Annotated[list[BaseMessage],add_messages]
+    perplexity_messages:Annotated[list[BaseMessage],add_messages]
     anthropic_messages:Annotated[list[BaseMessage],add_messages]
     selected_models: Dict[str,str]

@@ -10,5 +10,6 @@ langchain_anthropic==0.3.21
 langchain_deepseek==0.1.4
 PyMuPDF==1.24.14
 python-multipart==0.0.17
-pymongo==4.10.1
-openai==1.58.1
+pymongo==4.14.1
+openai==1.109.1
+langchain_community

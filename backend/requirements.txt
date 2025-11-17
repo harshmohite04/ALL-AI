@@ -2,6 +2,7 @@ langgraph
 langchain_openai
 langchain_groq
 langchain_google_genai
+langchain_community
 fastapi
 uvicorn
 python-dotenv
@@ -12,3 +13,4 @@ PyMuPDF
 python-multipart
 pymongo
 openai
+langchain_community
