@@ -100,7 +100,52 @@ def Perplexity(state:AgentState)->AgentState:
     perplexity_messages = state["perplexity_messages"]
     perplexity_model_name = state["selected_models"]["Perplexity"]
     print(perplexity_model_name)
-    response = llm_ChatPerplexity(perplexity_model_name).invoke(perplexity_messages)
+    # Perplexity API requires strict alternation of roles after optional system msgs.
+    # 1) Keep only system/human/ai messages
+    allowed = ("system", "human", "ai")
+    filtered = [m for m in perplexity_messages if getattr(m, "type", None) in allowed]
+
+    # 2) Merge consecutive messages of the same role
+    merged = []
+    for msg in filtered:
+        if merged and merged[-1].type == msg.type:
+            prev = merged[-1]
+            new_content = f"{getattr(prev, 'content', '')}\n\n{getattr(msg, 'content', '')}"
+            if msg.type == "human":
+                merged[-1] = HumanMessage(content=new_content)
+            else:
+                # For system/ai, LangChain will coerce via content field on same class
+                merged[-1].content = new_content
+        else:
+            merged.append(msg)
+
+    # 3) Ensure after optional system messages the first is human
+    normalized_msgs = []
+    idx = 0
+    # preserve leading system messages
+    while idx < len(merged) and merged[idx].type == "system":
+        normalized_msgs.append(merged[idx])
+        idx += 1
+    # drop any leading assistant messages before the first human
+    while idx < len(merged) and merged[idx].type != "human":
+        idx += 1
+    if idx < len(merged):
+        normalized_msgs.append(merged[idx])
+        idx += 1
+
+    # 4) Enforce alternation human -> ai -> human -> ai ...
+    expect = "ai"
+    while idx < len(merged):
+        msg = merged[idx]
+        if msg.type == expect:
+            normalized_msgs.append(msg)
+            expect = "human" if expect == "ai" else "ai"
+        else:
+            # skip messages that break alternation
+            pass
+        idx += 1
+
+    response = llm_ChatPerplexity(perplexity_model_name).invoke(normalized_msgs)
     return {"perplexity_messages": response}
 
 def Anthropic(state: AgentState) -> AgentState:

@@ -149,37 +149,102 @@ export default function MultiModelChat({ models, modelMessages, isLoading, selec
 
   const TypewriterMarkdown: React.FC<{ id: string; text: string; onTick?: () => void; onDone?: () => void; speed?: number }> = ({ id, text, onTick, onDone, speed = 18 }) => {
     const [len, setLen] = useState<number>(() => streamProgressRef.current[id] ?? 0)
+
     useEffect(() => {
       // If already completed, render full text without animating
       if (completedRef.current[id]) {
-        if (len !== text.length) {
-          setLen(text.length)
-        }
+        if (len !== text.length) setLen(text.length)
         return
       }
-      let raf: number
+
+      let raf: number | null = null
+      let interval: number | null = null
       let last = performance.now()
-      const step = (now: number) => {
-        const delta = now - last
-        const inc = Math.max(1, Math.floor(delta / speed))
+
+      // Compute dynamic increment based on message length and remaining chars
+      const computeInc = (deltaMs: number, currentLen: number) => {
+        const remaining = Math.max(0, text.length - currentLen)
+        // Base: smaller speed -> more chars per frame
+        // Scale throughput up as content grows and when a lot remains
+        const dynamicSpeed = Math.max(6, Math.min(speed, 24))
+        const baseInc = Math.max(1, Math.floor(deltaMs / dynamicSpeed))
+        const bonus = Math.ceil(Math.min(remaining / 120, 60)) // up to +60 for very long
+        return Math.max(baseInc, bonus)
+      }
+
+      const advance = (deltaMs: number) => {
         setLen((l) => {
+          const inc = computeInc(deltaMs, l)
           const next = Math.min(text.length, l + inc)
           streamProgressRef.current[id] = next
           onTick?.()
           if (next >= text.length) {
             completedRef.current[id] = true
             onDone?.()
-            return next
           }
           return next
         })
-        last = now
-        raf = requestAnimationFrame(step)
       }
-      raf = requestAnimationFrame(step)
-      return () => cancelAnimationFrame(raf)
-      // Only restart if text actually changes or id changes
+
+      const stepRaf = (now: number) => {
+        const delta = now - last
+        last = now
+        advance(delta)
+        raf = requestAnimationFrame(stepRaf)
+      }
+
+      const startRaf = () => {
+        if (raf == null) raf = requestAnimationFrame(stepRaf)
+      }
+
+      const stopRaf = () => {
+        if (raf != null) cancelAnimationFrame(raf)
+        raf = null
+      }
+
+      const startInterval = () => {
+        if (interval != null) return
+        // Use a modest tick in background; browsers throttle, so bump inc dynamically
+        const tickMs = 100
+        let lastWall = Date.now()
+        interval = window.setInterval(() => {
+          const nowWall = Date.now()
+          const delta = nowWall - lastWall
+          lastWall = nowWall
+          advance(delta)
+        }, tickMs)
+      }
+
+      const stopInterval = () => {
+        if (interval != null) window.clearInterval(interval)
+        interval = null
+      }
+
+      const handleVis = () => {
+        if (document.hidden) {
+          // In background: rAF pauses, switch to interval
+          stopRaf()
+          startInterval()
+        } else {
+          // Foreground: resume rAF for smoother animation
+          stopInterval()
+          last = performance.now()
+          startRaf()
+        }
+      }
+
+      // Kick off with appropriate scheduler
+      handleVis()
+      document.addEventListener('visibilitychange', handleVis)
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVis)
+        stopRaf()
+        stopInterval()
+      }
+      // Only restart if id/text/speed change
     }, [id, text, speed, onTick, onDone])
+
     return (
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents as any}>
         {text.slice(0, len)}
